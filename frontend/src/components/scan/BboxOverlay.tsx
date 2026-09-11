@@ -72,6 +72,14 @@ export const BboxOverlay: React.FC<BboxOverlayProps> = ({
   const [visibleFields, setVisibleFields] = useState<Record<string, boolean>>({});
   const [hoveredBox, setHoveredBox] = useState<BboxItem | null>(null);
 
+  // Image error state — prevents black screen if image URL fails to load
+  const [imgError, setImgError] = useState(false);
+
+  // Reset error state when imageUrl changes (e.g. user switches scan image)
+  useEffect(() => {
+    setImgError(false);
+  }, [imageUrl]);
+
   // Initialize all fields to visible when items change
   useEffect(() => {
     const initial: Record<string, boolean> = {};
@@ -279,13 +287,28 @@ export const BboxOverlay: React.FC<BboxOverlayProps> = ({
           className="relative w-full h-full flex items-center justify-center"
         >
           {/* Base Image */}
-          <img
-            ref={imageRef}
-            src={imageUrl}
-            alt={altText}
-            onLoad={updateImageRect}
-            className="max-h-[540px] max-w-full object-contain pointer-events-none"
-          />
+          {imgError ? (
+            <div className="flex flex-col items-center justify-center h-full gap-3 text-slate-500 select-none">
+              <div className="w-16 h-16 rounded-xl bg-slate-800 flex items-center justify-center">
+                <svg className="w-8 h-8 text-slate-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                </svg>
+              </div>
+              <span className="text-sm font-medium">Image not available</span>
+              <span className="text-xs text-slate-600 max-w-[200px] text-center">
+                The scanned label photo could not be loaded.
+              </span>
+            </div>
+          ) : (
+            <img
+              ref={imageRef}
+              src={imageUrl}
+              alt={altText}
+              onLoad={updateImageRect}
+              onError={() => setImgError(true)}
+              className="max-h-[540px] max-w-full object-contain pointer-events-none"
+            />
+          )}
 
           {/* SVG Overlay scaled perfectly to rendered image */}
           {imageRect.width > 0 && imageRect.height > 0 && (
