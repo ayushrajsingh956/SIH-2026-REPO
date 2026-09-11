@@ -1,0 +1,14 @@
+id: "LMPC-R6-1b-qty"
+title: "Net Quantity Declaration Presence"
+citation: "Rule 6(1)(b), Legal Metrology (Packaged Commodities) Rules, 2011: The net quantity in terms of standard metric unit of weight or measure shall be declared on every package."
+severity: "critical"
+applies_to:
+  - "retail"
+  - "wholesale"
+  - "imported"
+  - "ecommerce"
+check: "presence"
+params:
+  field: "net_quantity"
+description_plain: "The net quantity of the commodity contained in the package must be prominently declared."
+mandatory: true

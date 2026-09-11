@@ -1,0 +1,13 @@
+id: "LMPC-R6-1d"
+title: "Maximum Retail Price (MRP) Declaration Presence"
+citation: "Rule 6(1)(d), Legal Metrology (Packaged Commodities) Rules, 2011: The maximum retail price at which the commodity in packaged form may be sold to the consumer, inclusive of all taxes, shall be declared."
+severity: "critical"
+applies_to:
+  - "retail"
+  - "imported"
+  - "ecommerce"
+check: "presence"
+params:
+  field: "mrp"
+description_plain: "The maximum retail price (MRP) is mandatory on all packaged commodities intended for retail sale."
+mandatory: true

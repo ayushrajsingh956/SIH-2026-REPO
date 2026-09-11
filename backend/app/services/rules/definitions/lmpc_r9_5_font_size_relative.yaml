@@ -1,0 +1,14 @@
+id: "LMPC-R9-5-rel"
+title: "Relative Font Legibility & Prominence"
+citation: "Rule 9(5), Legal Metrology (Packaged Commodities) Rules, 2011: Declarations shall be conspicuous, legible and presented in appropriate font size proportionate to the display surface."
+severity: "minor"
+applies_to:
+  - "retail"
+  - "wholesale"
+  - "imported"
+  - "ecommerce"
+check: "font_size_relative"
+params:
+  min_char_height_px: 10.0
+description_plain: "Declarations must maintain sufficient character pixel height in the scanned image to ensure clear visual legibility."
+mandatory: false

@@ -21,17 +21,26 @@ from sqlalchemy import desc, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from app.core.audit import record_audit_event
 from app.core.config import settings
 from app.core.database import get_db
 from app.core.deps import require_role
+from app.models.rule_config import RuleConfig
 from app.models.scan import Scan
 from app.models.user import User
+from app.models.violation import Violation
+from app.schemas.rule import (
+    ScanExtractionUpdateRequest,
+    ViolationOverrideRequest,
+    ViolationResponse,
+)
 from app.schemas.scan import (
     ScanCreateResponse,
     ScanDetailResponse,
     ScanListResponse,
     ScanUrlRequest,
 )
+from app.services.rules import compute_score_and_verdict, evaluate_rules
 from app.services.storage.minio_client import presign_get_url, put_object_bytes
 from app.services.storage.security import (
     MAX_IMAGE_SIZE_BYTES,
@@ -268,7 +277,11 @@ async def get_scan_detail(
     current_user: User = Depends(require_role("admin", "inspector", "viewer")),
     db: AsyncSession = Depends(get_db),
 ) -> ScanDetailResponse:
-    stmt = select(Scan).options(selectinload(Scan.extraction)).where(Scan.id == id)
+    stmt = (
+        select(Scan)
+        .options(selectinload(Scan.extraction), selectinload(Scan.violations))
+        .where(Scan.id == id)
+    )
     result = await db.execute(stmt)
     scan = result.scalar_one_or_none()
 
@@ -295,6 +308,24 @@ async def get_scan_detail(
             "created_at": scan.extraction.created_at,
         }
 
+    violations_list = [
+        {
+            "id": str(v.id),
+            "scan_id": str(v.scan_id),
+            "rule_code": v.rule_code,
+            "rule_title": v.rule_title,
+            "citation": v.citation,
+            "severity": v.severity,
+            "field_name": v.field_name,
+            "observed_value": v.observed_value,
+            "expected_value": v.expected_value,
+            "bbox": v.bbox,
+            "overridden": v.overridden,
+            "override_reason": v.override_reason,
+        }
+        for v in scan.violations
+    ]
+
     return ScanDetailResponse(
         id=scan.id,
         product_id=scan.product_id,
@@ -310,6 +341,7 @@ async def get_scan_detail(
         pipeline_meta=scan.pipeline_meta,
         scanned_at=scan.scanned_at,
         extraction=extraction_dict,
+        violations=violations_list,
     )
 
 
@@ -330,7 +362,7 @@ async def list_scans(
 
     stmt = (
         select(Scan)
-        .options(selectinload(Scan.extraction))
+        .options(selectinload(Scan.extraction), selectinload(Scan.violations))
         .order_by(desc(Scan.scanned_at))
         .limit(limit)
         .offset(offset)
@@ -348,6 +380,23 @@ async def list_scans(
                 "model": scan.extraction.model,
                 "created_at": scan.extraction.created_at,
             }
+        violations_list = [
+            {
+                "id": str(v.id),
+                "scan_id": str(v.scan_id),
+                "rule_code": v.rule_code,
+                "rule_title": v.rule_title,
+                "citation": v.citation,
+                "severity": v.severity,
+                "field_name": v.field_name,
+                "observed_value": v.observed_value,
+                "expected_value": v.expected_value,
+                "bbox": v.bbox,
+                "overridden": v.overridden,
+                "override_reason": v.override_reason,
+            }
+            for v in scan.violations
+        ]
         items.append(
             ScanDetailResponse(
                 id=scan.id,
@@ -363,10 +412,249 @@ async def list_scans(
                 pipeline_meta=scan.pipeline_meta,
                 scanned_at=scan.scanned_at,
                 extraction=extraction_dict,
+                violations=violations_list,
             )
         )
 
     return ScanListResponse(items=items, total=total)
+
+
+@router.patch(
+    "/{id}/extraction",
+    response_model=ScanDetailResponse,
+    summary="Inspector/Admin updates extraction fields and re-evaluates compliance rules",
+)
+async def update_scan_extraction(
+    id: uuid.UUID,
+    payload: ScanExtractionUpdateRequest,
+    current_user: User = Depends(require_role("admin", "inspector")),
+    db: AsyncSession = Depends(get_db),
+) -> ScanDetailResponse:
+    stmt = (
+        select(Scan)
+        .options(selectinload(Scan.extraction), selectinload(Scan.violations))
+        .where(Scan.id == id)
+    )
+    result = await db.execute(stmt)
+    scan = result.scalar_one_or_none()
+    if not scan:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Scan {id} not found.",
+        )
+    if not scan.extraction:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Scan has no extracted fields to update.",
+        )
+
+    # Deep merge or update current extraction fields
+    current_fields = dict(scan.extraction.fields or {})
+    for k, v in payload.fields.items():
+        if isinstance(v, dict) and isinstance(current_fields.get(k), dict):
+            current_fields[k].update(v)
+        else:
+            current_fields[k] = v
+
+    scan.extraction.fields = current_fields
+
+    # Load rule configurations
+    rule_configs_res = await db.execute(select(RuleConfig))
+    rule_configs = rule_configs_res.scalars().all()
+
+    # Re-evaluate rules deterministically
+    violations, needs_review_flag = evaluate_rules(
+        fields=current_fields,
+        scan_mode=scan.mode,
+        surface_area_cm2=scan.surface_area_cm2,
+        font_check_mode=scan.font_check_mode,
+        raw_text=scan.extraction.raw_text,
+        rule_overrides=rule_configs,
+    )
+
+    score, verdict = compute_score_and_verdict(
+        violations=violations,
+        needs_review_flag=needs_review_flag,
+    )
+
+    # Remove existing violations and replace with new evaluation results
+    for old_v in list(scan.violations):
+        await db.delete(old_v)
+    scan.violations = []
+
+    new_violations: list[Violation] = []
+    for v in violations:
+        vm = Violation(
+            scan_id=scan.id,
+            rule_code=v.rule_code,
+            rule_title=v.rule_title,
+            citation=v.citation,
+            severity=v.severity,
+            field_name=v.field_name,
+            observed_value=v.observed_value,
+            expected_value=v.expected_value,
+            bbox=v.bbox,
+            overridden=False,
+        )
+        db.add(vm)
+        new_violations.append(vm)
+
+    scan.violations = new_violations
+    scan.compliance_score = score
+    scan.verdict = verdict
+    if scan.status == "needs_review" and verdict != "needs_review":
+        scan.status = "completed"
+
+    # Audit log
+    await record_audit_event(
+        db=db,
+        action="UPDATE_EXTRACTION",
+        entity_type="scan",
+        user_id=current_user.id,
+        entity_id=scan.id,
+        detail={
+            "fields_updated": list(payload.fields.keys()),
+            "new_score": score,
+            "new_verdict": verdict,
+            "violations_count": len(violations),
+        },
+    )
+
+    await db.commit()
+    db.expire_all()
+
+    # Re-query with relations loaded
+    refreshed_stmt = (
+        select(Scan)
+        .options(selectinload(Scan.extraction), selectinload(Scan.violations))
+        .where(Scan.id == id)
+    )
+    refreshed_scan = (await db.execute(refreshed_stmt)).scalar_one()
+
+    presigned = []
+    for key in refreshed_scan.image_urls:
+        try:
+            presigned.append(presign_get_url(key))
+        except Exception:
+            presigned.append(key)
+
+    violations_list = [
+        {
+            "id": str(v.id),
+            "scan_id": str(v.scan_id),
+            "rule_code": v.rule_code,
+            "rule_title": v.rule_title,
+            "citation": v.citation,
+            "severity": v.severity,
+            "field_name": v.field_name,
+            "observed_value": v.observed_value,
+            "expected_value": v.expected_value,
+            "bbox": v.bbox,
+            "overridden": v.overridden,
+            "override_reason": v.override_reason,
+        }
+        for v in refreshed_scan.violations
+    ]
+
+    extraction_dict = {
+        "fields": refreshed_scan.extraction.fields,
+        "raw_text": refreshed_scan.extraction.raw_text,
+        "model": refreshed_scan.extraction.model,
+        "created_at": refreshed_scan.extraction.created_at,
+    }
+
+    return ScanDetailResponse(
+        id=refreshed_scan.id,
+        product_id=refreshed_scan.product_id,
+        scanned_by=refreshed_scan.scanned_by,
+        mode=refreshed_scan.mode,
+        status=refreshed_scan.status,
+        verdict=refreshed_scan.verdict,
+        compliance_score=refreshed_scan.compliance_score,
+        font_check_mode=refreshed_scan.font_check_mode,
+        surface_area_cm2=refreshed_scan.surface_area_cm2,
+        image_urls=refreshed_scan.image_urls,
+        presigned_image_urls=presigned,
+        pipeline_meta=refreshed_scan.pipeline_meta,
+        scanned_at=refreshed_scan.scanned_at,
+        extraction=extraction_dict,
+        violations=violations_list,
+    )
+
+
+@router.post(
+    "/{id}/violations/{vid}/override",
+    response_model=ViolationResponse,
+    summary="Inspector/Admin overrides a rule violation with written justification",
+)
+async def override_scan_violation(
+    id: uuid.UUID,
+    vid: uuid.UUID,
+    request: ViolationOverrideRequest,
+    current_user: User = Depends(require_role("admin", "inspector")),
+    db: AsyncSession = Depends(get_db),
+) -> ViolationResponse:
+    # 1. Fetch violation
+    stmt = select(Violation).where(Violation.id == vid, Violation.scan_id == id)
+    result = await db.execute(stmt)
+    violation = result.scalar_one_or_none()
+
+    if not violation:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Violation {vid} for scan {id} not found.",
+        )
+
+    # 2. Mark overridden
+    violation.overridden = True
+    violation.override_reason = request.reason
+
+    # 3. Load all violations for scan to recompute compliance score
+    all_v_stmt = select(Violation).where(Violation.scan_id == id)
+    all_violations = (await db.execute(all_v_stmt)).scalars().all()
+
+    new_score, new_verdict = compute_score_and_verdict(all_violations)
+
+    # 4. Update scan score & verdict
+    scan_stmt = select(Scan).where(Scan.id == id)
+    scan = (await db.execute(scan_stmt)).scalar_one_or_none()
+    if scan:
+        scan.compliance_score = new_score
+        scan.verdict = new_verdict
+
+    # 5. Record structured audit event
+    await record_audit_event(
+        db=db,
+        action="OVERRIDE_VIOLATION",
+        entity_type="violation",
+        user_id=current_user.id,
+        entity_id=violation.id,
+        detail={
+            "scan_id": str(id),
+            "rule_code": violation.rule_code,
+            "reason": request.reason,
+            "new_compliance_score": new_score,
+            "new_verdict": new_verdict,
+        },
+    )
+
+    await db.commit()
+    await db.refresh(violation)
+
+    return ViolationResponse(
+        id=str(violation.id),
+        scan_id=str(violation.scan_id),
+        rule_code=violation.rule_code,
+        rule_title=violation.rule_title,
+        citation=violation.citation,
+        severity=violation.severity,
+        field_name=violation.field_name,
+        observed_value=violation.observed_value,
+        expected_value=violation.expected_value,
+        bbox=violation.bbox,
+        overridden=violation.overridden,
+        override_reason=violation.override_reason,
+    )
 
 
 @router.websocket("/{id}/events")

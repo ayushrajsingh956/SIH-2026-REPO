@@ -1,0 +1,13 @@
+id: "LMPC-R9-1a"
+title: "Maximum Retail Price Format & Currency"
+citation: "Rule 9(1), Legal Metrology (Packaged Commodities) Rules, 2011: The declaration on a package shall contain retail sale price in Indian Rupees (INR or ₹) followed by the actual numerical price."
+severity: "critical"
+applies_to:
+  - "retail"
+  - "imported"
+  - "ecommerce"
+check: "mrp_format"
+params:
+  field: "mrp"
+description_plain: "MRP must be a positive numerical value declared in Indian Rupees (₹ or Rs.)."
+mandatory: true

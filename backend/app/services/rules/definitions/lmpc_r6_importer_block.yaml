@@ -1,0 +1,21 @@
+id: "LMPC-R6-importer"
+title: "Completeness of Importer Declaration for Imported Goods"
+citation: "Rule 6(1)(a) and Rule 6(1)(f), Legal Metrology (Packaged Commodities) Rules, 2011: For any imported package, the name and complete address of the importer as well as the country of origin shall be declared."
+severity: "critical"
+applies_to:
+  - "retail"
+  - "wholesale"
+  - "imported"
+  - "ecommerce"
+check: "field_pair_match"
+params:
+  condition_field: "country_of_origin"
+  non_domestic_values_exclude:
+    - "india"
+    - "bharat"
+    - "in"
+  required_fields:
+    - "importer_name"
+    - "importer_address"
+description_plain: "If the product is imported or country of origin is outside India, both importer name and importer complete address must be declared."
+mandatory: true

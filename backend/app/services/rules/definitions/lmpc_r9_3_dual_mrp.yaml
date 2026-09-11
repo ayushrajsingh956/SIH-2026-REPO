@@ -1,0 +1,13 @@
+id: "LMPC-R9-3"
+title: "Prohibition of Dual MRP"
+citation: "Rule 9(3), Legal Metrology (Packaged Commodities) Rules, 2011: No person shall declare different maximum retail prices on an identical pre-packaged commodity."
+severity: "critical"
+applies_to:
+  - "retail"
+  - "imported"
+  - "ecommerce"
+check: "condition"
+params:
+  check_type: "dual_mrp"
+description_plain: "Declaration of dual or multiple differing MRPs on an identical pre-packaged commodity is strictly prohibited."
+mandatory: true

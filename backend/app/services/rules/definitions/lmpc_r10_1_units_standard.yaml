@@ -1,0 +1,27 @@
+id: "LMPC-R10-1"
+title: "Standard Metric Unit for Net Quantity"
+citation: "Rule 10(1), Legal Metrology (Packaged Commodities) Rules, 2011: The declaration of quantity shall be expressed in terms of standard units of weight, measure or number (g, kg, ml, l, m, cm, mm, or number/u) with no non-standard symbols or symbols in plural form."
+severity: "major"
+applies_to:
+  - "retail"
+  - "wholesale"
+  - "imported"
+  - "ecommerce"
+check: "net_quantity_unit_standard"
+params:
+  field: "net_quantity"
+  allowed_units:
+    - "g"
+    - "kg"
+    - "ml"
+    - "l"
+    - "m"
+    - "cm"
+    - "mm"
+    - "u"
+    - "n"
+    - "piece"
+    - "pieces"
+    - "count"
+description_plain: "Net quantity must be declared using standard metric units without illegal plural symbols (e.g. g not gms, kg not kgs, ml not mls)."
+mandatory: true

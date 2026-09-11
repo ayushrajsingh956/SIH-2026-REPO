@@ -1,0 +1,15 @@
+id: "LMPC-R6-1a"
+title: "Manufacturer / Packer / Importer Name & Address"
+citation: "Rule 6(1)(a), Legal Metrology (Packaged Commodities) Rules, 2011: The name and complete address of the manufacturer, or where manufacturer is not the packer, the name and address of the manufacturer and packer and for any imported package the name and address of the importer shall be declared."
+severity: "critical"
+applies_to:
+  - "retail"
+  - "wholesale"
+  - "imported"
+  - "ecommerce"
+check: "presence"
+params:
+  field: "manufacturer_name"
+  secondary_field: "manufacturer_address"
+description_plain: "Every packaged commodity must visibly declare the registered name and complete physical address of the manufacturer or packer."
+mandatory: true

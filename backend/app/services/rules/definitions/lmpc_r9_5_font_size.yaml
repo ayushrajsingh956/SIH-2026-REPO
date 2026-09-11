@@ -1,0 +1,23 @@
+id: "LMPC-R9-5"
+title: "Minimum Font Size Compliance (Rule 9(5) Table 1)"
+citation: "Rule 9(5), Legal Metrology (Packaged Commodities) Rules, 2011: The minimum height of any numeral and letter in the declaration shall be as specified in Table 1 according to the area of the principal display panel."
+severity: "major"
+applies_to:
+  - "retail"
+  - "wholesale"
+  - "imported"
+check: "font_size_surface_area"
+params:
+  area_brackets:
+    - max_area: 50
+      min_height_mm: 1.0
+    - max_area: 100
+      min_height_mm: 1.5
+    - max_area: 500
+      min_height_mm: 2.5
+    - max_area: 2500
+      min_height_mm: 4.0
+    - max_area: 999999
+      min_height_mm: 6.0
+description_plain: "The height of numerals and letters in mandatory declarations must satisfy the minimum prescribed height based on the principal display panel surface area."
+mandatory: false

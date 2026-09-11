@@ -1,0 +1,13 @@
+id: "LMPC-R9-1b"
+title: "MRP Inclusive of All Taxes Declaration"
+citation: "Rule 9(1), Legal Metrology (Packaged Commodities) Rules, 2011: The Maximum Retail Price shall be clearly stated as 'inclusive of all taxes' or 'incl. of all taxes'."
+severity: "major"
+applies_to:
+  - "retail"
+  - "imported"
+  - "ecommerce"
+check: "taxes_inclusive_text"
+params:
+  field: "mrp"
+description_plain: "MRP declaration must explicitly include the words 'inclusive of all taxes' or recognized abbreviation."
+mandatory: true

@@ -33,6 +33,7 @@ class ScanDetailResponse(BaseModel):
     pipeline_meta: dict[str, Any] | None = None
     scanned_at: datetime
     extraction: dict[str, Any] | None = None
+    violations: list[dict[str, Any]] = Field(default_factory=list)
 
 
 class ScanListResponse(BaseModel):

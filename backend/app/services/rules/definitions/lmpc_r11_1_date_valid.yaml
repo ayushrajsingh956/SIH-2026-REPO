@@ -1,0 +1,15 @@
+id: "LMPC-R11-1"
+title: "Validity of Month and Year of Manufacture / Packing"
+citation: "Rule 11, Legal Metrology (Packaged Commodities) Rules, 2011: Month and year of manufacture or packing shall be valid calendar values and shall not indicate a future date beyond permitted packing allowances."
+severity: "critical"
+applies_to:
+  - "retail"
+  - "wholesale"
+  - "imported"
+  - "ecommerce"
+check: "date_valid_not_future"
+params:
+  field: "mfg_date"
+  tolerance_months: 1
+description_plain: "The manufacturing/packing date must have a valid month (1-12) and year, and must not be post-dated into the future."
+mandatory: true

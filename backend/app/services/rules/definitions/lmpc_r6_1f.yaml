@@ -1,0 +1,14 @@
+id: "LMPC-R6-1f"
+title: "Country of Origin Declaration"
+citation: "Rule 6(1)(f), Legal Metrology (Packaged Commodities) Rules, 2011: The name of the country of origin or manufacture or assembly in case of imported products shall be declared."
+severity: "major"
+applies_to:
+  - "retail"
+  - "wholesale"
+  - "imported"
+  - "ecommerce"
+check: "presence"
+params:
+  field: "country_of_origin"
+description_plain: "Country of origin must be declared on every packaged commodity (mandatory for all imported goods)."
+mandatory: true

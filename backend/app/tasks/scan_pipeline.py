@@ -12,10 +12,13 @@ from sqlalchemy.pool import NullPool
 
 from app.core.config import settings
 from app.models.extraction import Extraction
+from app.models.rule_config import RuleConfig
 from app.models.scan import Scan
+from app.models.violation import Violation
 from app.services.extraction.gemini_extractor import extract_with_gemini
 from app.services.extraction.preprocessor import preprocess_image
 from app.services.extraction.tesseract_fallback import extract_with_tesseract_fallback
+from app.services.rules import compute_score_and_verdict, evaluate_rules
 from app.services.storage.minio_client import get_object_bytes, put_object_bytes
 from app.services.storage.security import sanitize_storage_key
 from app.tasks.celery_app import celery_app
@@ -161,8 +164,28 @@ async def _async_scan_pipeline(task_self: Any, scan_id: str) -> dict[str, Any]:
         t_extract_duration = round((time.perf_counter() - t_extract_start) * 1000, 2)
         total_duration = round((time.perf_counter() - t_start) * 1000, 2)
 
-        # 5. Status Transition: completed / needs_review
-        if fallback_used or avg_confidence < 0.6:
+        # 5. Evaluate Compliance Rules & Score
+        rule_configs_res = await session.execute(select(RuleConfig))
+        rule_configs = rule_configs_res.scalars().all()
+
+        violations, needs_review_flag = evaluate_rules(
+            fields=extraction_result.fields,
+            scan_mode=scan.mode,
+            surface_area_cm2=scan.surface_area_cm2,
+            font_check_mode=scan.font_check_mode,
+            detected_text_blocks=extraction_result.detected_text_blocks,
+            raw_text=extraction_result.raw_text,
+            rule_overrides=rule_configs,
+        )
+
+        score, verdict = compute_score_and_verdict(
+            violations=violations,
+            needs_review_flag=needs_review_flag,
+            confidence_score=avg_confidence,
+        )
+
+        # Status Transition: completed / needs_review
+        if fallback_used or avg_confidence < 0.6 or verdict == "needs_review":
             final_status = "needs_review"
         else:
             final_status = "completed"
@@ -172,6 +195,9 @@ async def _async_scan_pipeline(task_self: Any, scan_id: str) -> dict[str, Any]:
             "provider": provider,
             "avg_confidence": avg_confidence,
             "fallback_used": fallback_used,
+            "compliance_score": score,
+            "verdict": verdict,
+            "violations_count": len(violations),
             "durations": {
                 "preprocess_ms": t_prep_duration,
                 "extract_ms": t_extract_duration,
@@ -181,14 +207,19 @@ async def _async_scan_pipeline(task_self: Any, scan_id: str) -> dict[str, Any]:
             "preprocessing_details": prep_metadata,
         }
 
-        # 6. Persist Extraction & Update Scan
-        # Delete existing extraction if retry
+        # 6. Persist Extraction & Violations & Update Scan
         existing_extr = await session.execute(
             select(Extraction).where(Extraction.scan_id == scan_uuid)
         )
         existing_obj = existing_extr.scalar_one_or_none()
         if existing_obj:
             await session.delete(existing_obj)
+
+        existing_violations = await session.execute(
+            select(Violation).where(Violation.scan_id == scan_uuid)
+        )
+        for ev in existing_violations.scalars().all():
+            await session.delete(ev)
 
         extraction = Extraction(
             scan_id=scan.id,
@@ -198,6 +229,23 @@ async def _async_scan_pipeline(task_self: Any, scan_id: str) -> dict[str, Any]:
         )
         session.add(extraction)
 
+        for v in violations:
+            violation_model = Violation(
+                scan_id=scan.id,
+                rule_code=v.rule_code,
+                rule_title=v.rule_title,
+                citation=v.citation,
+                severity=v.severity,
+                field_name=v.field_name,
+                observed_value=v.observed_value,
+                expected_value=v.expected_value,
+                bbox=v.bbox,
+                overridden=False,
+            )
+            session.add(violation_model)
+
+        scan.compliance_score = score
+        scan.verdict = verdict
         scan.status = final_status
         scan.pipeline_meta = pipeline_meta
         await session.commit()
@@ -206,16 +254,20 @@ async def _async_scan_pipeline(task_self: Any, scan_id: str) -> dict[str, Any]:
         terminal_event = {
             "scan_id": scan_id,
             "status": final_status,
+            "verdict": verdict,
+            "compliance_score": score,
+            "violations_count": len(violations),
             "pipeline_meta": pipeline_meta,
         }
         publish_scan_event(scan_id, terminal_event)
 
         logger.info(
-            "Scan %s completed with status=%s, provider=%s, conf=%.2f",
+            "Scan %s completed with status=%s, verdict=%s, score=%.1f, violations=%d",
             scan_id,
             final_status,
-            provider,
-            avg_confidence,
+            verdict,
+            score,
+            len(violations),
         )
         return terminal_event
 

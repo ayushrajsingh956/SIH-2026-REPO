@@ -19,7 +19,7 @@ class Violation(Base, UUIDPrimaryKeyMixin):
     )
     rule_code: Mapped[str] = mapped_column(String(100), nullable=False, index=True)
     rule_title: Mapped[str] = mapped_column(String(255), nullable=False)
-    citation: Mapped[str] = mapped_column(String(255), nullable=False)
+    citation: Mapped[str] = mapped_column(Text, nullable=False)
     severity: Mapped[str] = mapped_column(
         String(50), nullable=False, index=True
     )  # critical, major, minor, advisory

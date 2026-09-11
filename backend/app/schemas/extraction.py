@@ -52,6 +52,7 @@ class TextBlock(BaseModel):
     text: str
     bbox: list[float] = Field(default_factory=list)
     estimated_char_height_px: float | None = None
+    estimated_font_height_mm: float | None = None
 
 
 class ExtractionFields(BaseModel):

@@ -1,0 +1,22 @@
+id: "LMPC-R10-2"
+title: "Net Quantity Placement & Qualifier Prohibition"
+citation: "Rule 10(2), Legal Metrology (Packaged Commodities) Rules, 2011: The declaration of quantity shall not contain any qualifying words, expressions or symbols at variance with the net quantity, and must be prominently placed."
+severity: "minor"
+applies_to:
+  - "retail"
+  - "wholesale"
+  - "imported"
+  - "ecommerce"
+check: "net_quantity_placement"
+params:
+  field: "net_quantity"
+  disallowed_qualifiers:
+    - "approx"
+    - "approx."
+    - "approximately"
+    - "when packed"
+    - "minimum"
+    - "min."
+    - "average"
+description_plain: "Net quantity must not include misleading qualifying phrases like 'approx', 'when packed', or 'average'."
+mandatory: true

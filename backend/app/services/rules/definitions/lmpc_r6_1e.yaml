@@ -1,0 +1,14 @@
+id: "LMPC-R6-1e"
+title: "Consumer Care Contact Details"
+citation: "Rule 6(1)(e), Legal Metrology (Packaged Commodities) Rules, 2011: The name, address, telephone number, and e-mail address of the person or the office which may be contacted in case of consumer complaints shall be declared."
+severity: "major"
+applies_to:
+  - "retail"
+  - "wholesale"
+  - "imported"
+  - "ecommerce"
+check: "presence"
+params:
+  field: "consumer_care"
+description_plain: "Consumer redressal details (at least telephone number or email address) must be provided."
+mandatory: true

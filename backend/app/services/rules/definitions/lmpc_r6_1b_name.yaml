@@ -1,0 +1,14 @@
+id: "LMPC-R6-1b-name"
+title: "Common / Generic Name Declaration"
+citation: "Rule 6(1)(b), Legal Metrology (Packaged Commodities) Rules, 2011: The common or generic names of the commodity contained in the package shall be declared."
+severity: "major"
+applies_to:
+  - "retail"
+  - "wholesale"
+  - "imported"
+  - "ecommerce"
+check: "presence"
+params:
+  field: "generic_name"
+description_plain: "The generic or common commodity name (e.g. Shampoo, Toothpaste, Coffee) must be declared."
+mandatory: true

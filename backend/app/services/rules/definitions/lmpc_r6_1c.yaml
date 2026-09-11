@@ -1,0 +1,14 @@
+id: "LMPC-R6-1c"
+title: "Month and Year of Manufacture / Packing / Import"
+citation: "Rule 6(1)(c), Legal Metrology (Packaged Commodities) Rules, 2011: The month and year in which the commodity is manufactured or pre-packed or imported shall be declared on every package."
+severity: "major"
+applies_to:
+  - "retail"
+  - "wholesale"
+  - "imported"
+  - "ecommerce"
+check: "presence"
+params:
+  field: "mfg_date"
+description_plain: "Every package must clearly declare the month and year of packaging, manufacture, or import."
+mandatory: true
