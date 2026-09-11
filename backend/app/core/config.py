@@ -32,10 +32,17 @@ class Settings(BaseSettings):
 
     # MinIO / S3 Object Storage
     MINIO_ENDPOINT: str = "localhost:9000"
+    # Endpoint browsers use to fetch presigned URLs (defaults to MINIO_ENDPOINT).
+    # Must be resolvable from the CLIENT (e.g. localhost:9000), not the docker-internal name.
     MINIO_ACCESS_KEY: str = "minioadmin"
     MINIO_SECRET_KEY: str = "minioadmin"
     MINIO_BUCKET: str = "legalmetro-scans"
     MINIO_SECURE: bool = False
+    MINIO_PUBLIC_ENDPOINT: str = ""
+
+    @property
+    def minio_public_endpoint(self) -> str:
+        return self.MINIO_PUBLIC_ENDPOINT or self.MINIO_ENDPOINT
 
     # AI & Vision
     GEMINI_API_KEY: str = ""

@@ -13,6 +13,7 @@ from fastapi import (
     File,
     Form,
     Request,
+    Response,
     UploadFile,
     WebSocket,
     WebSocketDisconnect,
@@ -46,7 +47,11 @@ from app.schemas.scan import (
     ScanUrlRequest,
 )
 from app.services.rules import compute_score_and_verdict, evaluate_rules
-from app.services.storage.minio_client import presign_get_url, put_object_bytes
+from app.services.storage.minio_client import (
+    get_object_bytes,
+    presign_get_url,
+    put_object_bytes,
+)
 from app.services.storage.security import (
     MAX_IMAGE_SIZE_BYTES,
     MAX_IMAGES_PER_SCAN,
@@ -114,12 +119,18 @@ def serialize_extraction(extraction: Any) -> dict[str, Any] | None:
 
 def serialize_scan_detail(scan: Scan, presign: bool = True) -> ScanDetailResponse:
     presigned: list[str] = []
-    if presign and scan.image_urls:
-        for key in scan.image_urls:
-            try:
-                presigned.append(presign_get_url(key))
-            except Exception:
+    if scan.image_urls:
+        for idx, key in enumerate(scan.image_urls):
+            if key.startswith(("http://", "https://", "data:", "blob:")):
                 presigned.append(key)
+                continue
+            if presign:
+                try:
+                    presigned.append(presign_get_url(key))
+                except Exception:
+                    presigned.append(f"/api/v1/scans/{scan.id}/images/{idx}")
+            else:
+                presigned.append(f"/api/v1/scans/{scan.id}/images/{idx}")
 
     return ScanDetailResponse(
         id=scan.id,
@@ -415,6 +426,73 @@ async def get_scan_detail(
         )
 
     return serialize_scan_detail(scan, presign=True)
+
+
+@router.get(
+    "/{id}/images/{image_index}",
+    summary="Directly stream scanned product image from storage",
+    response_class=Response,
+)
+async def get_scan_image(
+    id: uuid.UUID,
+    image_index: int = 0,
+    db: AsyncSession = Depends(get_db),
+) -> Response:
+    """Streams an uploaded scan image directly from MinIO/S3 storage.
+
+    Enables reliable rendering in all environments without CORS or private DNS issues.
+    """
+    stmt = select(Scan).where(Scan.id == id)
+    result = await db.execute(stmt)
+    scan = result.scalar_one_or_none()
+
+    if not scan:
+        raise ProblemDetailException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            title="Scan Not Found",
+            detail=f"Scan {id} not found.",
+            type_url="https://errors.legalmetro.gov.in/scan-not-found",
+        )
+
+    if not scan.image_urls or image_index < 0 or image_index >= len(scan.image_urls):
+        raise ProblemDetailException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            title="Image Not Found",
+            detail=f"Image index {image_index} not found for scan {id}.",
+            type_url="https://errors.legalmetro.gov.in/image-not-found",
+        )
+
+    key = scan.image_urls[image_index]
+
+    # If the key is an external HTTP URL, redirect or fetch it
+    if key.startswith(("http://", "https://")):
+        return Response(status_code=status.HTTP_307_TEMPORARY_REDIRECT, headers={"Location": key})
+
+    try:
+        data = get_object_bytes(key)
+    except Exception as exc:
+        logger.error("Failed to read image %s from storage: %s", key, exc)
+        raise ProblemDetailException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            title="Image Retrieval Failed",
+            detail="Scanned image could not be loaded from storage.",
+            type_url="https://errors.legalmetro.gov.in/storage-error",
+        )
+
+    content_type = "image/jpeg"
+    if key.lower().endswith(".png"):
+        content_type = "image/png"
+    elif key.lower().endswith(".webp"):
+        content_type = "image/webp"
+
+    return Response(
+        content=data,
+        media_type=content_type,
+        headers={
+            "Cache-Control": "public, max-age=86400",
+            "Content-Disposition": f'inline; filename="scan_{id}_{image_index}.jpg"',
+        },
+    )
 
 
 @router.get(

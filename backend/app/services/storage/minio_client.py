@@ -1,4 +1,5 @@
 import logging
+from urllib.parse import urlsplit
 
 from minio import Minio
 from minio.error import S3Error
@@ -93,11 +94,38 @@ def presign_get_url(
     bucket_name: str | None = None,
     expires_seconds: int = 3600,
 ) -> str:
-    """Generates a presigned GET URL for client-side download/viewing."""
+    """Generates a presigned GET URL for client-side download/viewing.
+
+    SigV4 signatures include the Host header, so the URL must be signed with
+    the endpoint the CLIENT will use (MINIO_PUBLIC_ENDPOINT, defaulting to
+    MINIO_ENDPOINT) — not the docker-internal one. Presigning is local
+    signature computation; no connection to the endpoint is made, so the
+    public host only needs to resolve from the browser.
+    """
     from datetime import timedelta
 
     bucket = bucket_name or settings.MINIO_BUCKET
-    client = get_minio_client()
+    public = settings.minio_public_endpoint
+    if public and not public.startswith(("http://", "https://")):
+        public = f"{'https' if settings.MINIO_SECURE else 'http'}://{public}"
+
+    internal = settings.MINIO_ENDPOINT
+    if not internal.startswith(("http://", "https://")):
+        internal = f"{'https' if settings.MINIO_SECURE else 'http'}://{internal}"
+
+    if public and urlsplit(public).netloc != urlsplit(internal).netloc:
+        # region pinned so presigning never needs a GetBucketLocation round-trip
+        # to the (client-only, possibly unreachable) public endpoint.
+        client = Minio(
+            urlsplit(public).netloc,
+            access_key=settings.MINIO_ACCESS_KEY,
+            secret_key=settings.MINIO_SECRET_KEY,
+            secure=public.startswith("https://"),
+            region="us-east-1",
+        )
+    else:
+        client = get_minio_client()
+
     return client.presigned_get_object(
         bucket_name=bucket,
         object_name=object_name,

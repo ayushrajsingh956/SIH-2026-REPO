@@ -110,8 +110,15 @@ def test_clean_json_markdown():
 
 
 def test_groq_missing_api_key(sample_label_bytes):
-    with pytest.raises(ValueError, match="GROQ_API_KEY is not configured"):
-        extract_with_groq([sample_label_bytes], api_key="")
+    from unittest.mock import patch
+    # Patch out any GROQ_API_KEY that may exist in the test environment
+    with patch("app.services.extraction.groq_extractor.settings") as mock_settings:
+        mock_settings.GROQ_API_KEY = ""
+        mock_settings.GROQ_BASE_URL = "https://api.groq.com/openai/v1"
+        mock_settings.GROQ_MODEL = "groq/compound"
+        mock_settings.GROQ_FALLBACK_MODELS = []
+        with pytest.raises(ValueError, match="GROQ_API_KEY is not configured"):
+            extract_with_groq([sample_label_bytes], api_key="")
 
 
 @respx.mock
