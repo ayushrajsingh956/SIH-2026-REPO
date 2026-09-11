@@ -3,6 +3,7 @@ import io
 import json
 import logging
 import re
+import time
 from typing import Any
 
 import httpx
@@ -14,6 +15,27 @@ from app.services.extraction.gemini_extractor import apply_normalizations, compu
 from app.services.extraction.prompts import LMPC_EXTRACTION_PROMPT_V1
 
 logger = logging.getLogger(__name__)
+
+
+def _downscale_image_if_needed(img_bytes: bytes, max_dim: int = 1024) -> tuple[bytes, str]:
+    """Downscales image to max_dim on the longest edge while preserving aspect ratio and crisp text.
+    Reduces vision patch tokens by ~70%, preventing TPM (8000) rate limit exhaustion on Groq."""
+    try:
+        with Image.open(io.BytesIO(img_bytes)) as pil_img:
+            w, h = pil_img.size
+            if max(w, h) <= max_dim:
+                return img_bytes, f"image/{pil_img.format.lower() if pil_img.format else 'jpeg'}"
+            scale = max_dim / float(max(w, h))
+            new_w, new_h = max(1, int(w * scale)), max(1, int(h * scale))
+            resized = pil_img.resize((new_w, new_h), Image.Resampling.LANCZOS)
+            out_buf = io.BytesIO()
+            if resized.mode in ("RGBA", "P"):
+                resized = resized.convert("RGB")
+            resized.save(out_buf, format="JPEG", quality=88, optimize=True)
+            return out_buf.getvalue(), "image/jpeg"
+    except Exception as exc:
+        logger.debug("Image downscaling skipped: %s", exc)
+        return img_bytes, "image/jpeg"
 
 
 def _clean_json_markdown(text: str) -> str:
@@ -29,16 +51,47 @@ def _clean_json_markdown(text: str) -> str:
 
 
 def _extract_offline_ocr_text(images_bytes: list[bytes]) -> str:
-    """Extracts raw text from image buffers using pytesseract as a fallback for text-only LLMs."""
+    """Extracts raw text from image buffers using multi-pass contrast & inverted OCR."""
+    import cv2
+    import numpy as np
     import pytesseract
 
     accumulated: list[str] = []
     for idx, img_buf in enumerate(images_bytes):
         try:
-            pil_img = Image.open(io.BytesIO(img_buf))
-            text = pytesseract.image_to_string(pil_img)
-            if text.strip():
-                accumulated.append(f"--- Image {idx + 1} Raw OCR Text ---\n{text.strip()}")
+            np_buf = np.frombuffer(img_buf, dtype=np.uint8)
+            img = cv2.imdecode(np_buf, cv2.IMREAD_COLOR)
+            if img is None:
+                pil_img = Image.open(io.BytesIO(img_buf))
+                text = pytesseract.image_to_string(pil_img)
+                if text.strip():
+                    accumulated.append(f"--- Image {idx + 1} Raw OCR Text ---\n{text.strip()}")
+                continue
+
+            gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+            clahe = cv2.createCLAHE(clipLimit=2.5, tileGridSize=(8, 8))
+            enhanced = clahe.apply(gray)
+            inverted = cv2.bitwise_not(enhanced)
+
+            # Pass 1: Standard layout blocks
+            t1 = pytesseract.image_to_string(enhanced, config="--psm 6")
+            # Pass 2: Sparse/scattered layout (captures isolated consumer care/MRP/dates)
+            t2 = pytesseract.image_to_string(enhanced, config="--psm 11")
+            # Pass 3: Inverted polarity (captures white text on dark/colored packaging wrappers)
+            t3 = pytesseract.image_to_string(inverted, config="--psm 11")
+
+            lines_seen = set()
+            combined_lines = []
+            for block in (t1, t2, t3):
+                for line in block.splitlines():
+                    cleaned = line.strip()
+                    if len(cleaned) > 2 and cleaned.lower() not in lines_seen:
+                        lines_seen.add(cleaned.lower())
+                        combined_lines.append(cleaned)
+
+            full_text = "\n".join(combined_lines)
+            if full_text.strip():
+                accumulated.append(f"--- Image {idx + 1} Raw OCR Text ---\n{full_text.strip()}")
         except Exception as exc:
             logger.warning("OCR text extraction failed for image %d: %s", idx, exc)
     return "\n\n".join(accumulated)
@@ -106,11 +159,11 @@ def extract_with_groq(
         "User-Agent": "LegalMetro-Shield/1.0",
     }
 
-    # Prepare base64 images for multimodal vision requests
+    # Prepare downscaled base64 images for multimodal vision requests
     image_contents: list[dict[str, Any]] = []
     for idx, img_buf in enumerate(images_bytes):
-        mtype = mime_types[idx] if (mime_types and idx < len(mime_types)) else "image/png"
-        b64_img = base64.b64encode(img_buf).decode("utf-8")
+        opt_buf, mtype = _downscale_image_if_needed(img_buf, max_dim=1024)
+        b64_img = base64.b64encode(opt_buf).decode("utf-8")
         image_contents.append(
             {
                 "type": "image_url",
@@ -136,29 +189,51 @@ def extract_with_groq(
             tier_info.get("rpd", "N/A"),
         )
 
-        # 1. Attempt Multimodal Vision Call
-        multimodal_payload = {
-            "model": model,
-            "messages": [
-                {
-                    "role": "system",
-                    "content": "You are a specialized Legal Metrology Vision AI. Always output strictly valid JSON matching the requested schema.",
-                },
-                {
-                    "role": "user",
-                    "content": [
-                        {"type": "text", "text": schema_prompt},
-                        *image_contents,
-                    ],
-                },
-            ],
-            "temperature": 0.1,
-            "response_format": {"type": "json_object"},
-        }
+        is_known_text_only = any(
+            t in model.lower() for t in ["compound", "gpt-oss", "prompt-guard", "allam"]
+        )
 
         try:
             with httpx.Client(timeout=timeout) as client:
-                resp = client.post(url, headers=headers, json=multimodal_payload)
+                if is_known_text_only:
+                    if cached_ocr_text is None:
+                        cached_ocr_text = _extract_offline_ocr_text(images_bytes)
+                    payload = {
+                        "model": model,
+                        "messages": [
+                            {
+                                "role": "system",
+                                "content": "You are a specialized Legal Metrology AI. Always output strictly valid JSON matching the requested schema.",
+                            },
+                            {
+                                "role": "user",
+                                "content": f"{schema_prompt}\n\nExtracted Raw OCR Text from Label:\n```\n{cached_ocr_text}\n```",
+                            },
+                        ],
+                        "temperature": 0.1,
+                        "response_format": {"type": "json_object"},
+                    }
+                else:
+                    payload = {
+                        "model": model,
+                        "messages": [
+                            {
+                                "role": "system",
+                                "content": "You are a specialized Legal Metrology Vision AI. Always output strictly valid JSON matching the requested schema.",
+                            },
+                            {
+                                "role": "user",
+                                "content": [
+                                    {"type": "text", "text": schema_prompt},
+                                    *image_contents,
+                                ],
+                            },
+                        ],
+                        "temperature": 0.1,
+                        "response_format": {"type": "json_object"},
+                    }
+
+                resp = client.post(url, headers=headers, json=payload)
 
                 # Telemetry: Log rate limit headers from Groq if provided
                 req_rem = resp.headers.get("x-ratelimit-remaining-requests")
@@ -175,6 +250,35 @@ def extract_with_groq(
                     logger.warning("%s. Failing over to next fallback model.", msg)
                     errors.append(msg)
                     continue
+
+                # 413: base64 payload exceeded the model's request-size cap.
+                if resp.status_code == 413:
+                    logger.info(
+                        "Model %s rejected image payload (HTTP 413). Retrying with OCR text prompt.",
+                        model,
+                    )
+                    if cached_ocr_text is None:
+                        cached_ocr_text = _extract_offline_ocr_text(images_bytes)
+
+                    text_payload = {
+                        "model": model,
+                        "messages": [
+                            {
+                                "role": "system",
+                                "content": "You are a specialized Legal Metrology AI. Always output strictly valid JSON matching the requested schema.",
+                            },
+                            {
+                                "role": "user",
+                                "content": (
+                                    f"{schema_prompt}\n\n"
+                                    f"Extracted Raw OCR Text from Label:\n```\n{cached_ocr_text}\n```"
+                                ),
+                            },
+                        ],
+                        "temperature": 0.1,
+                        "response_format": {"type": "json_object"},
+                    }
+                    resp = client.post(url, headers=headers, json=text_payload)
 
                 # If model is text-only or returns 400 rejecting image_url, fallback to OCR transcript
                 if resp.status_code == 400:

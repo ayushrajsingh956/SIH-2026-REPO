@@ -179,7 +179,7 @@ async def _async_scan_pipeline(task_self: Any, scan_id: str) -> dict[str, Any]:
 
             # Secondary fallback to Gemini if Groq failed or had low confidence
             if (fallback_used or extraction_result is None) and bool(settings.GEMINI_API_KEY):
-                gemini_model = settings.GEMINI_MODEL or "gemini-2.5-flash"
+                gemini_model = settings.GEMINI_MODEL or "gemini-3.1-flash-lite"
                 fallback_chain.append(f"gemini:{gemini_model}")
                 try:
                     extraction_result, avg_confidence = extract_with_gemini(
@@ -194,7 +194,7 @@ async def _async_scan_pipeline(task_self: Any, scan_id: str) -> dict[str, Any]:
                     logger.warning("Gemini secondary fallback failed for scan %s: %s", scan_id, exc)
 
         elif primary_provider == "gemini" and bool(settings.GEMINI_API_KEY):
-            gemini_model = settings.GEMINI_MODEL or "gemini-2.5-flash"
+            gemini_model = settings.GEMINI_MODEL or "gemini-3.1-flash-lite"
             fallback_chain.append(f"gemini:{gemini_model}")
             try:
                 extraction_result, avg_confidence = extract_with_gemini(

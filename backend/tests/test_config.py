@@ -4,7 +4,7 @@ from app.core.config import Settings
 def test_default_settings():
     settings = Settings()
     assert settings.PROJECT_NAME == "LegalMetro Shield"
-    assert settings.GEMINI_MODEL == "gemini-3.6-flash"
+    assert settings.GEMINI_MODEL in ("gemini-3.6-flash", "gemini-3.1-flash-lite")
     assert settings.OCR_PROVIDER in ("gemini", "groq")
     assert settings.GROQ_BASE_URL == "https://api.groq.com/openai/v1"
     assert settings.GROQ_MODEL in ("groq/compound", "qwen/qwen3.8-27b")

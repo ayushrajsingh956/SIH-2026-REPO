@@ -1,0 +1,14 @@
+id: "LMPC-R6-11-USP"
+title: "Unit Sale Price (USP) & Rate Control Declaration"
+citation: "Rule 6(11), Legal Metrology (Packaged Commodities) Rules, 2011 (amended): Every package containing more than one unit or standard weight/measure must declare the Unit Sale Price (e.g. ₹ per g/kg/ml/unit) and must accurately reflect the MRP divided by net quantity."
+severity: "major"
+applies_to:
+  - "retail"
+  - "wholesale"
+  - "imported"
+  - "ecommerce"
+check: "unit_sale_price_control"
+params:
+  tolerance_pct: 5.0
+description_plain: "The unit sale price in Rupees per standard unit (g/kg/ml/u) must be declared and must accurately equal the MRP divided by the declared net quantity within 5% tolerance."
+mandatory: true

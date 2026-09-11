@@ -227,7 +227,7 @@ export const ExtractedFieldsTable: React.FC<ExtractedFieldsTableProps> = ({
                   {/* Source Badge */}
                   <td className="py-3 px-3 align-top whitespace-nowrap">
                     <span className="text-[10px] font-mono uppercase tracking-wider px-1.5 py-0.5 rounded bg-slate-100 text-slate-600 border border-slate-200">
-                      {item?.source || "gemini"}
+                      {item?.source || "ai"}
                     </span>
                   </td>
 

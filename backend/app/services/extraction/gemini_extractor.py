@@ -1,5 +1,6 @@
 import json
 import logging
+import re
 from typing import Any
 
 from app.core.config import settings
@@ -42,7 +43,17 @@ def apply_normalizations(result: ExtractionResultSchema) -> ExtractionResultSche
         if norm_curr:
             fields.mrp.value = norm_curr["value"]
             fields.mrp.currency = norm_curr["currency"]
-            if norm_curr.get("taxes_inclusive"):
+            # Check either in mrp.raw or overall raw_text
+            raw_all = (fields.mrp.raw + " " + (result.raw_text or "")).lower()
+            if (
+                norm_curr.get("taxes_inclusive")
+                or "inclusive of all taxes" in raw_all
+                or "incl. of all taxes" in raw_all
+                or "incl. of taxes" in raw_all
+                or "incl of all taxes" in raw_all
+                or "incl. all taxes" in raw_all
+                or ("incl" in raw_all and "tax" in raw_all)
+            ):
                 fields.mrp.taxes_inclusive_text = "Inclusive of all taxes"
 
     # 2. Dates
@@ -86,6 +97,61 @@ def apply_normalizations(result: ExtractionResultSchema) -> ExtractionResultSche
         cleaned_mfg_addr = clean_address(fields.manufacturer_address.raw)
         fields.manufacturer_address.normalized = cleaned_mfg_addr["address"]
 
+    # 6. Country of Origin
+    # Under LMPC Rule 6(1)(f), Country of Origin is mandatory for imported products.
+    # If not explicitly captured, but manufacturer address or raw label text indicates domestic
+    # manufacturing in India, infer "India" to prevent false positive violations.
+    if not fields.country_of_origin.raw:
+        addr = (fields.manufacturer_address.raw or "") + " " + (fields.manufacturer_address.normalized or "")
+        mfg_name = fields.manufacturer_name.raw or ""
+        raw_txt = result.raw_text or ""
+        combined = (addr + " " + mfg_name + " " + raw_txt).lower()
+        indian_keywords = [
+            "india", "pune", "delhi", "mumbai", "bengaluru", "bangalore", "chennai", "kolkata",
+            "hyderabad", "ahmedabad", "gujarat", "maharashtra", "karnataka", "tamil nadu",
+            "haryana", "uttar pradesh", "rajasthan", "midc", "okhla", "talegaon", "noida",
+            "gurgaon", "gurugram", "kerala", "punjab", "west bengal", "uttarakhand", "sidcul",
+            "pantnagar", "haridwar", "ranipur"
+        ]
+        if any(kw in combined for kw in indian_keywords):
+            fields.country_of_origin.raw = "India"
+            fields.country_of_origin.normalized = "India"
+            fields.country_of_origin.confidence = 0.95
+            fields.country_of_origin.present = True
+
+    # 7. Sugar Content Normalization (from table or raw text)
+    if not fields.sugar_content.value_per_100g and result.raw_text:
+        sugar_match = re.search(
+            r"(?:total\s+sugar|added\s+sugar|sugars?)\s*[:\-]?\s*([0-9]+(?:\.[0-9]+)?)\s*(?:g|%)?",
+            result.raw_text,
+            re.IGNORECASE,
+        )
+        if sugar_match:
+            try:
+                s_val = float(sugar_match.group(1))
+                fields.sugar_content.value_per_100g = s_val
+                fields.sugar_content.raw = sugar_match.group(0)
+                fields.sugar_content.confidence = 0.85
+                fields.sugar_content.present = True
+            except (ValueError, TypeError):
+                pass
+
+    # 8. Unit Sale Price (USP) Calculation / Normalization
+    if fields.mrp.value and fields.net_quantity.value and fields.net_quantity.value > 0:
+        calc_rate = round(fields.mrp.value / fields.net_quantity.value, 4)
+        if fields.unit_sale_price.unit_price is not None:
+            # Verify if matches within 5% tolerance
+            if calc_rate > 0:
+                diff = abs(fields.unit_sale_price.unit_price - calc_rate) / calc_rate
+                fields.unit_sale_price.is_calculated_match = diff <= 0.05
+        else:
+            fields.unit_sale_price.unit_price = calc_rate
+            fields.unit_sale_price.unit = fields.net_quantity.unit or "unit"
+            fields.unit_sale_price.raw = f"Rs. {calc_rate:.2f}/{fields.unit_sale_price.unit}"
+            fields.unit_sale_price.confidence = 0.85
+            fields.unit_sale_price.present = True
+            fields.unit_sale_price.is_calculated_match = True
+
     return result
 
 
@@ -95,7 +161,10 @@ def extract_with_gemini(
     api_key: str | None = None,
     model: str | None = None,
 ) -> tuple[ExtractionResultSchema, float]:
-    """Invokes Gemini 2.5 Flash using google-genai SDK to extract structured LMPC fields.
+    """Invokes Gemini using google-genai SDK to extract structured LMPC fields.
+
+    Uses gemini-3.1-flash-lite as primary high-speed model with automatic fallback
+    to gemini-3.7-flash and gemini-3.8-flash upon server load spikes.
 
     Returns:
         tuple of (ExtractionResultSchema, avg_confidence)
@@ -106,7 +175,20 @@ def extract_with_gemini(
     if not key:
         raise ValueError("GEMINI_API_KEY is not configured.")
 
-    model_name = model or settings.GEMINI_MODEL or "gemini-2.5-flash"
+    candidate_models = [
+        m for m in [
+            model,
+            settings.GEMINI_MODEL,
+            "gemini-3.1-flash-lite",
+            "gemini-3.7-flash",
+            "gemini-3.8-flash",
+        ] if m
+    ]
+    # Remove duplicates preserving order
+    unique_candidates: list[str] = []
+    for m in candidate_models:
+        if m not in unique_candidates:
+            unique_candidates.append(m)
 
     from google import genai
     from google.genai import types
@@ -120,28 +202,33 @@ def extract_with_gemini(
 
     contents.append(LMPC_EXTRACTION_PROMPT_V1)
 
-    response = client.models.generate_content(
-        model=model_name,
-        contents=contents,
-        config=types.GenerateContentConfig(
-            response_mime_type="application/json",
-            response_schema=ExtractionResultSchema,
-            temperature=0.1,
-        ),
-    )
+    last_exc = None
+    for cand_model in unique_candidates:
+        try:
+            response = client.models.generate_content(
+                model=cand_model,
+                contents=contents,
+                config=types.GenerateContentConfig(
+                    response_mime_type="application/json",
+                    response_schema=ExtractionResultSchema,
+                    temperature=0.1,
+                ),
+            )
+            if not response.text:
+                raise ValueError(f"Gemini {cand_model} returned empty response text.")
 
-    if not response.text:
-        raise ValueError("Gemini returned empty response text.")
+            data = json.loads(response.text)
+            result_schema = ExtractionResultSchema.model_validate(data)
 
-    try:
-        data = json.loads(response.text)
-        result_schema = ExtractionResultSchema.model_validate(data)
-    except Exception as exc:
-        logger.error("Failed to parse Gemini JSON schema response: %s", exc)
-        raise ValueError(f"Gemini response parsing failed: {exc}") from exc
+            # Apply normalizers
+            result_schema = apply_normalizations(result_schema)
+            avg_conf = compute_avg_confidence(result_schema)
 
-    # Apply normalizers
-    result_schema = apply_normalizations(result_schema)
-    avg_conf = compute_avg_confidence(result_schema)
+            logger.info("Gemini extraction succeeded with model '%s' (Confidence: %s)", cand_model, avg_conf)
+            return result_schema, avg_conf
+        except Exception as exc:
+            logger.warning("Gemini model '%s' failed: %s", cand_model, exc)
+            last_exc = exc
+            continue
 
-    return result_schema, avg_conf
+    raise ValueError(f"All Gemini models exhausted. Last error: {last_exc}") from last_exc

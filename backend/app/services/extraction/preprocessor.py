@@ -52,20 +52,17 @@ def preprocess_image(image_bytes: bytes) -> tuple[bytes, dict[str, Any]]:
         except Exception:
             denoised = cv2.GaussianBlur(gray, (3, 3), 0)
 
-    # 4. Adaptive thresholding
-    thresh = cv2.adaptiveThreshold(
-        denoised,
-        maxValue=255,
-        adaptiveMethod=cv2.ADAPTIVE_THRESH_GAUSSIAN_C,
-        thresholdType=cv2.THRESH_BINARY,
-        blockSize=15,
-        C=4,
-    )
+    # 4. Contrast enhancement using CLAHE (preserves font edges and anti-aliasing)
+    clahe = cv2.createCLAHE(clipLimit=2.5, tileGridSize=(8, 8))
+    enhanced = clahe.apply(denoised)
 
-    # 5. Deskew via minAreaRect
+    # 5. Deskew detection using Otsu binarization (for angle computation only)
+    _, thresh = cv2.threshold(denoised, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
     inv_thresh = cv2.bitwise_not(thresh)
     pts = cv2.findNonZero(inv_thresh)
     deskew_angle = 0.0
+
+    output_img = enhanced
 
     if pts is not None and len(pts) > 100:
         rect = cv2.minAreaRect(pts)
@@ -83,9 +80,8 @@ def preprocess_image(image_bytes: bytes) -> tuple[bytes, dict[str, Any]]:
             deskew_angle = round(angle, 2)
             center = (orig_w // 2, orig_h // 2)
             rot_mat = cv2.getRotationMatrix2D(center, deskew_angle, 1.0)
-            # Warp with white background
-            thresh = cv2.warpAffine(
-                thresh,
+            output_img = cv2.warpAffine(
+                enhanced,
                 rot_mat,
                 (orig_w, orig_h),
                 flags=cv2.INTER_CUBIC,
@@ -94,7 +90,7 @@ def preprocess_image(image_bytes: bytes) -> tuple[bytes, dict[str, Any]]:
             )
 
     # 6. Encode to PNG bytes
-    success, encoded = cv2.imencode(".png", thresh)
+    success, encoded = cv2.imencode(".png", output_img)
     if not success or encoded is None:
         raise ValueError("Failed to encode preprocessed image to PNG format.")
 

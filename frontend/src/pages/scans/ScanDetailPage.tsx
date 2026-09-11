@@ -324,7 +324,7 @@ export const ScanDetailPage: React.FC = () => {
           {scan.pipeline_meta && (
             <div className="p-3 bg-white rounded-xl border border-slate-200 text-[11px] text-slate-500 flex items-center justify-between shadow-xs">
               <span>
-                Model: <span className="font-mono text-slate-700">{scan.pipeline_meta.model || "gemini-2.5-flash"}</span>
+                Model: <span className="font-mono text-slate-700">{scan.pipeline_meta.model || "qwen/qwen3.8-27b"}</span>
               </span>
               {scan.pipeline_meta.durations?.total_ms && (
                 <span>

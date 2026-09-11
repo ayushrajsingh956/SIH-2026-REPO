@@ -1,0 +1,14 @@
+id: "FSSAI-R4-SUGAR"
+title: "Maximum Sugar Threshold / HFSS Safety Limit"
+citation: "FSSAI (Labelling and Display) Regulations, 2020: Packaged food commodities exceeding permissible added or total sugar threshold (> 25g/100g or configured threshold) shall declare front-of-pack warning or fail statutory compliance."
+severity: "critical"
+applies_to:
+  - "retail"
+  - "wholesale"
+  - "imported"
+  - "ecommerce"
+check: "sugar_threshold"
+params:
+  max_sugar_g: 25.0
+description_plain: "Total or added sugar content per 100g must not exceed regulatory safety thresholds (default 25g/100g). If exceeded without statutory warning, product fails compliance."
+mandatory: true

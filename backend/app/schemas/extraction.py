@@ -13,7 +13,7 @@ class BaseFieldExtraction(BaseModel):
     confidence: float = Field(default=0.0, ge=0.0, le=1.0)
     bbox: list[float] = Field(default_factory=list)
     present: bool = True
-    source: Literal["gemini", "groq", "ocr_fallback"] = "gemini"
+    source: str = "ai"
 
 
 class StandardTextField(BaseFieldExtraction):
@@ -29,6 +29,19 @@ class MRPField(BaseFieldExtraction):
     value: float | None = None
     currency: str = "INR"
     taxes_inclusive_text: str | None = None
+
+
+class SugarContentField(BaseFieldExtraction):
+    value_per_100g: float | None = None
+    unit: str = "g"
+    raw_text: str | None = None
+
+
+class UnitSalePriceField(BaseFieldExtraction):
+    unit_price: float | None = None
+    unit: str | None = None
+    currency: str = "INR"
+    is_calculated_match: bool | None = None
 
 
 class DateField(BaseFieldExtraction):
@@ -73,6 +86,8 @@ class ExtractionFields(BaseModel):
     dimensions: DimensionsField = Field(default_factory=DimensionsField)
     generic_name: StandardTextField = Field(default_factory=StandardTextField)
     quantity_declaration_other: BaseFieldExtraction = Field(default_factory=BaseFieldExtraction)
+    sugar_content: SugarContentField = Field(default_factory=SugarContentField)
+    unit_sale_price: UnitSalePriceField = Field(default_factory=UnitSalePriceField)
 
 
 class ExtractionResultSchema(BaseModel):

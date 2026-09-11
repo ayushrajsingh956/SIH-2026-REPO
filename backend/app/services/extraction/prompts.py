@@ -13,7 +13,7 @@ Extract the following declarations with high fidelity:
 2. manufacturer_address: Complete physical address including premise, street, city, state, and 6-digit PIN code if present.
 3. importer_name: If the commodity is imported, the name of the importer (present=true if imported).
 4. importer_address: Complete address of the importer.
-5. country_of_origin: Country where the goods were manufactured or produced (e.g., "India", "Germany", "China").
+5. country_of_origin: Country where the goods were manufactured or produced (e.g., "India", "Germany", "China"). If domestic Indian address, report "India".
 6. net_quantity: Standard metric weight/volume/length/count declaration (e.g. value: 500, unit: "ml").
 7. mrp: Maximum Retail Price in Indian Rupees. Check whether "inclusive of all taxes" or equivalent phrasing is printed.
 8. mfg_date: Month and year of manufacture, packing, or import (e.g., month: 2, year: 2026).
@@ -22,6 +22,8 @@ Extract the following declarations with high fidelity:
 11. dimensions: Package dimensions (length, breadth, height in cm) if declared.
 12. generic_name: Common or generic name of the commodity (e.g., "Instant Coffee", "Toothpaste").
 13. quantity_declaration_other: Any additional or secondary quantity declaration.
+14. sugar_content: Nutritional sugar information (value_per_100g: float in grams, e.g. 28.5 from nutritional table or ingredients).
+15. unit_sale_price: Unit Sale Price (USP) per unit or standard metric (e.g. unit_price: 0.43, unit: "g", currency: "INR").
 
 For EVERY field:
 - Provide the "raw" exact string read from the packaging.

@@ -767,6 +767,104 @@ class ConditionValidator(BaseValidator):
         return violations
 
 
+class SugarThresholdValidator(BaseValidator):
+    def validate(
+        self,
+        rule: RuleDefinitionSchema,
+        fields: ExtractionFields,
+        context: ValidationContext,
+    ) -> list[ViolationData]:
+        violations: list[ViolationData] = []
+
+        # Check rule override thresholds if provided, else rule.params
+        thresholds = {}
+        if context.rule_overrides and rule.id in context.rule_overrides:
+            thresholds = context.rule_overrides[rule.id].get("thresholds") or {}
+        max_sugar = thresholds.get("max_sugar_g", rule.params.get("max_sugar_g", 25.0))
+        try:
+            max_sugar = float(max_sugar)
+        except (ValueError, TypeError):
+            max_sugar = 25.0
+
+        sugar_val = None
+        if hasattr(fields, "sugar_content") and fields.sugar_content.value_per_100g is not None:
+            sugar_val = fields.sugar_content.value_per_100g
+        elif context.raw_text:
+            sugar_match = re.search(
+                r"(?:total\s+sugar|added\s+sugar|sugars?)\s*[:\-]?\s*([0-9]+(?:\.[0-9]+)?)\s*(?:g|%)?",
+                context.raw_text,
+                re.IGNORECASE,
+            )
+            if sugar_match:
+                try:
+                    sugar_val = float(sugar_match.group(1))
+                except (ValueError, TypeError):
+                    pass
+
+        if sugar_val is not None and sugar_val > max_sugar:
+            violations.append(
+                ViolationData(
+                    rule_code=rule.id,
+                    rule_title=rule.title,
+                    citation=rule.citation,
+                    severity=rule.severity,
+                    field_name="sugar_content",
+                    observed_value=f"{sugar_val}g / 100g",
+                    expected_value=f"<= {max_sugar}g / 100g (Permissible Safety Threshold)",
+                    bbox={"coords": fields.sugar_content.bbox}
+                    if hasattr(fields, "sugar_content") and fields.sugar_content.bbox
+                    else None,
+                )
+            )
+
+        return violations
+
+
+class UnitSalePriceValidator(BaseValidator):
+    def validate(
+        self,
+        rule: RuleDefinitionSchema,
+        fields: ExtractionFields,
+        context: ValidationContext,
+    ) -> list[ViolationData]:
+        violations: list[ViolationData] = []
+
+        mrp_val = fields.mrp.value if fields.mrp else None
+        qty_val = fields.net_quantity.value if fields.net_quantity else None
+        qty_unit = fields.net_quantity.unit if fields.net_quantity else "g"
+
+        # Unit Sale Price applies to packages containing more than 1 unit or metric weight
+        if mrp_val and qty_val and qty_val > 1.0:
+            expected_rate = round(mrp_val / qty_val, 4)
+            usp_obj = getattr(fields, "unit_sale_price", None)
+            declared_price = usp_obj.unit_price if usp_obj else None
+
+            # Tolerance percentage (default 5%)
+            tolerance_pct = rule.params.get("tolerance_pct", 5.0)
+            if declared_price is not None:
+                # Check for uncontrolled rate inflation or discrepancy
+                diff = (
+                    abs(declared_price - expected_rate) / expected_rate
+                    if expected_rate > 0
+                    else 0
+                )
+                if diff > (tolerance_pct / 100.0):
+                    violations.append(
+                        ViolationData(
+                            rule_code=rule.id,
+                            rule_title=rule.title,
+                            citation=rule.citation,
+                            severity=rule.severity,
+                            field_name="unit_sale_price",
+                            observed_value=f"Declared USP: Rs. {declared_price:.2f}/{qty_unit}",
+                            expected_value=f"Calculated Rate: Rs. {expected_rate:.2f}/{qty_unit} (within +/-{tolerance_pct}%)",
+                            bbox={"coords": usp_obj.bbox} if usp_obj and usp_obj.bbox else None,
+                        )
+                    )
+
+        return violations
+
+
 # Validator registry instance
 _VALIDATORS: dict[str, BaseValidator] = {
     "presence": PresenceValidator(),
@@ -780,6 +878,8 @@ _VALIDATORS: dict[str, BaseValidator] = {
     "font_size_relative": FontSizeRelativeValidator(),
     "field_pair_match": FieldPairMatchValidator(),
     "condition": ConditionValidator(),
+    "sugar_threshold": SugarThresholdValidator(),
+    "unit_sale_price_control": UnitSalePriceValidator(),
 }
 
 

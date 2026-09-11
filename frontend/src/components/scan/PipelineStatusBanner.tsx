@@ -19,7 +19,7 @@ interface Step {
 
 const PIPELINE_STEPS: Step[] = [
   { id: "preprocessing", label: "Preprocess", description: "Deskew, denoise & contrast normalization" },
-  { id: "extracting", label: "Extract", description: "Gemini 2.5 Flash structured vision OCR" },
+  { id: "extracting", label: "Extract", description: "Multi-tier Vision AI & Statutory OCR" },
   { id: "validating", label: "Validate", description: "LMPC Rules 2011 deterministic checks" },
   { id: "scoring", label: "Score", description: "Compliance rating & verdict calculation" },
 ];
