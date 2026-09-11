@@ -57,6 +57,60 @@ HTTP 200 Response:
 
 ---
 
+## 2A. Post-Deploy Smoke Tests (run after every fresh deployment)
+
+These five checks verify the full request path end-to-end. All commands assume the stack is up and `infra` is the working directory.
+
+```bash
+BASE=http://localhost   # use http://localhost:8000 when running without the nginx prod profile
+
+# 1. Login as the seeded admin (also confirms migrations + seeder ran)
+TOKEN=$(curl -s -X POST $BASE/api/v1/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"email":"admin@legalmetro.gov.in","password":"AdminPass123!"}' \
+  | python3 -c "import json,sys; print(json.load(sys.stdin)['access_token'])")
+echo "token: ${TOKEN:0:25}..."
+
+# 2. Health + authed read
+curl -sf $BASE/healthz | python3 -m json.tool
+curl -sf $BASE/api/v1/auth/me -H "Authorization: Bearer $TOKEN" | python3 -m json.tool
+
+# 3. Upload the bundled sample label and poll the scan to completion
+#    (exercises: multipart upload -> MinIO -> Celery -> LLM extraction -> rules engine)
+SCAN=$(curl -s -X POST $BASE/api/v1/scans \
+  -H "Authorization: Bearer $TOKEN" \
+  -F "images=@../frontend/public/sample_test_label.jpg;type=image/jpeg" \
+  -F "mode=retail" -F "font_check_mode=relative")
+SID=$(echo "$SCAN" | python3 -c "import json,sys; print(json.load(sys.stdin)['scan_id'])")
+until [ "$(docker compose exec -T postgres psql -U postgres -d legalmetro -tAc \
+  "SELECT status FROM scans WHERE id='$SID'")" != "processing" ]; do sleep 5; done
+docker compose exec postgres psql -U postgres -d legalmetro -tAc \
+  "SELECT status, verdict, compliance_score FROM scans WHERE id='$SID'"
+
+# 4. Presigned image renders (the "black image" regression check — must be 200 + image/jpeg)
+DETAIL=$(curl -s $BASE/api/v1/scans/$SID -H "Authorization: Bearer $TOKEN")
+URL=$(echo "$DETAIL" | python3 -c "import json,sys; print(json.load(sys.stdin)['presigned_image_urls'][0])")
+echo "presigned host: $(echo $URL | cut -d/ -f3)"; curl -s -o /dev/null -w "%{http_code} %{content_type}\n" "$URL"
+
+# 5. Extracted fields populated (LLM actually returned data, not an empty schema)
+echo "$DETAIL" | python3 -c "
+import json,sys
+f = json.load(sys.stdin)['extraction']['fields']
+print({k: v.get('raw') for k, v in f.items() if v.get('raw')})"
+```
+
+**Expected results:** step 1 returns a JWT; step 2 `status: ok` on all deps; step 3 shows
+`completed | compliant | ~100.0` for the bundled label; step 4 prints `200 image/jpeg` and the
+host portion must be a **client-resolvable** address (see `MINIO_PUBLIC_ENDPOINT` above —
+a `minio:9000` host here means the browser will show a black image); step 5 lists populated
+fields (`mrp`, `net_quantity`, `mfg_date`, manufacturer name/address, consumer care).
+
+If step 3 stalls in `queued`, check the worker: `docker compose logs worker --tail 50`
+(Redis down or broker unreachable are the usual causes; a scan left in `queued` after a
+worker restart is recoverable by re-running the same upload).
+
+---
+
 ## 2. Environment Configuration Matrix
 
 The following environment variables configure the system across development, staging, and production:
@@ -67,6 +121,7 @@ The following environment variables configure the system across development, sta
 | `DATABASE_URL` | `postgresql+asyncpg://postgres:postgres@localhost:5432/legalmetro` | Yes | Async PostgreSQL connection string. |
 | `REDIS_URL` | `redis://localhost:6379/0` | Yes | Redis broker and cache connection string. |
 | `MINIO_ENDPOINT` | `localhost:9000` | Yes | S3 / MinIO storage endpoint (without protocol prefix). |
+| `MINIO_PUBLIC_ENDPOINT` | `""` (falls back to `MINIO_ENDPOINT`) | Yes (when containers reach MinIO via an internal hostname) | Endpoint **browsers** use to fetch presigned image URLs. Must be resolvable from the client machine (e.g. `http://localhost:9000` in local docker, `https://storage.legalmetro.gov.in` in production). If unset, presigned URLs inherit `MINIO_ENDPOINT` and will render as a black/empty image viewer when the endpoint is a docker-internal hostname. |
 | `MINIO_ACCESS_KEY` | `minioadmin` | Yes | MinIO / S3 access key ID. |
 | `MINIO_SECRET_KEY` | `minioadmin` | Yes | MinIO / S3 secret access key. |
 | `MINIO_BUCKET` | `legalmetro-scans` | Yes | S3 bucket name for evidence photos and reports. |
