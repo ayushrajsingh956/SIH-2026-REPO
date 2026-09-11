@@ -39,7 +39,7 @@ class Settings(BaseSettings):
 
     # AI & Vision
     GEMINI_API_KEY: str = ""
-    GEMINI_MODEL: str = "gemini-2.5-flash"
+    GEMINI_MODEL: str = "gemini-3.6-flash"
     OCR_PROVIDER: Literal["gemini", "groq", "tesseract", "gcv"] = "gemini"
 
     # Groq Fallback & Multi-Model

@@ -48,7 +48,7 @@ def extract_with_groq(
     base_url: str | None = None,
     preferred_model: str | None = None,
     fallback_models: list[str] | None = None,
-    timeout: float = 45.0,
+    timeout: float = 20.0,
 ) -> tuple[ExtractionResultSchema, float, str]:
     """Invokes Groq's OpenAI-compatible API to extract structured LMPC compliance declarations.
 
@@ -174,7 +174,9 @@ def extract_with_groq(
 
                 # If model is text-only or returns 400 rejecting image_url, fallback to OCR transcript
                 if resp.status_code == 400 and (
-                    "image" in resp.text.lower() or "vision" in resp.text.lower()
+                    "image" in resp.text.lower()
+                    or "vision" in resp.text.lower()
+                    or "must be a string" in resp.text.lower()
                 ):
                     logger.info(
                         "Model %s does not support vision inputs. Retrying with OCR text prompt.",

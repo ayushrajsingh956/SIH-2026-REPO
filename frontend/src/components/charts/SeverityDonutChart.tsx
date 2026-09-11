@@ -30,16 +30,17 @@ export const SeverityDonutChart: React.FC<Props> = ({ data }) => {
   }
 
   return (
-    <div className="flex flex-col sm:flex-row items-center justify-between gap-4 h-72">
-      <div className="relative w-full sm:w-1/2 h-56">
+    <div className="flex flex-col items-center justify-between gap-3 w-full">
+      {/* Donut Chart with centered summary */}
+      <div className="relative w-full h-48 flex items-center justify-center">
         <ResponsiveContainer width="100%" height="100%">
-          <PieChart>
+          <PieChart margin={{ top: 5, right: 5, bottom: 5, left: 5 }}>
             <Tooltip
               content={({ active, payload }) => {
                 if (active && payload && payload.length) {
                   const d = payload[0].payload as SeverityData;
                   return (
-                    <div style={DATAVIZ_THEME.tooltipStyle} className="p-2.5">
+                    <div style={DATAVIZ_THEME.tooltipStyle} className="p-2.5 shadow-lg">
                       <div className="font-semibold capitalize text-xs text-white">
                         {d.severity} Severity
                       </div>
@@ -58,8 +59,8 @@ export const SeverityDonutChart: React.FC<Props> = ({ data }) => {
               nameKey="severity"
               cx="50%"
               cy="50%"
-              innerRadius={55}
-              outerRadius={80}
+              innerRadius={46}
+              outerRadius={68}
               paddingAngle={3}
             >
               {data.map((entry, index) => (
@@ -70,33 +71,40 @@ export const SeverityDonutChart: React.FC<Props> = ({ data }) => {
         </ResponsiveContainer>
         {/* Center label */}
         <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-          <span className="text-2xl font-extrabold text-slate-900">{total}</span>
-          <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">
+          <span className="text-2xl font-black text-slate-900 tracking-tight">{total}</span>
+          <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
             Violations
           </span>
         </div>
       </div>
 
-      {/* Legend list */}
-      <div className="w-full sm:w-1/2 space-y-2.5 pr-2">
-        {data.map((item) => {
-          const color = getSeverityColor(item.severity);
-          return (
-            <div key={item.severity} className="flex items-center justify-between text-xs">
-              <div className="flex items-center gap-2">
-                <span
-                  className="w-2.5 h-2.5 rounded-full inline-block"
-                  style={{ backgroundColor: color }}
-                />
-                <span className="capitalize font-medium text-slate-700">{item.severity}</span>
+      {/* Legend Rows - clean, spacious, completely legible and never cut off */}
+      <div className="w-full space-y-2 pt-3 border-t border-slate-100">
+        {data
+          .filter((item) => item.count > 0)
+          .map((item) => {
+            const color = getSeverityColor(item.severity);
+            return (
+              <div
+                key={item.severity}
+                className="flex items-center justify-between px-3 py-1.5 rounded-lg bg-slate-50 border border-slate-100"
+              >
+                <div className="flex items-center gap-2">
+                  <span
+                    className="w-2.5 h-2.5 rounded-full shrink-0"
+                    style={{ backgroundColor: color }}
+                  />
+                  <span className="capitalize font-semibold text-slate-700 text-xs">
+                    {item.severity} Severity
+                  </span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="font-bold text-slate-900 text-xs">{item.count}</span>
+                  <span className="text-slate-500 font-medium text-xs">({item.percentage}%)</span>
+                </div>
               </div>
-              <div className="flex items-center gap-2">
-                <span className="font-bold text-slate-900">{item.count}</span>
-                <span className="text-slate-400 w-10 text-right">({item.percentage}%)</span>
-              </div>
-            </div>
-          );
-        })}
+            );
+          })}
       </div>
     </div>
   );

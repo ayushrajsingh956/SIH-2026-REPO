@@ -59,9 +59,9 @@ export const ComplianceTrendLineChart: React.FC<Props> = ({
         </div>
       </div>
 
-      <div className="w-full h-64">
+      <div className="w-full h-72">
         <ResponsiveContainer width="100%" height="100%">
-          <AreaChart data={data} margin={{ top: 10, right: 15, left: -10, bottom: 0 }}>
+          <AreaChart data={data} margin={{ top: 10, right: 20, left: 10, bottom: 5 }}>
             <defs>
               <linearGradient id="complianceGradient" x1="0" y1="0" x2="0" y2="1">
                 <stop offset="5%" stopColor="#10b981" stopOpacity={0.3} />
@@ -77,6 +77,7 @@ export const ComplianceTrendLineChart: React.FC<Props> = ({
             />
             <YAxis
               domain={[0, 100]}
+              width={45}
               tick={{ fontSize: 11, fill: "#64748b" }}
               tickLine={false}
               axisLine={{ stroke: "#cbd5e1" }}

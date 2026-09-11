@@ -41,6 +41,8 @@ dist-ssr/
 *.local
 .npm
 .eslintcache
+frontend/playwright-report/
+frontend/test-results/
 
 # macOS & IDE
 .DS_Store

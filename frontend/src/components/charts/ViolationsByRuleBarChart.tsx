@@ -41,7 +41,7 @@ export const ViolationsByRuleBarChart: React.FC<Props> = ({ data }) => {
         <BarChart
           layout="vertical"
           data={sortedData}
-          margin={{ top: 10, right: 25, left: 35, bottom: 5 }}
+          margin={{ top: 10, right: 30, left: 20, bottom: 5 }}
         >
           <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke={DATAVIZ_THEME.grid.stroke} />
           <XAxis type="number" allowDecimals={false} tick={{ fontSize: 11, fill: "#64748b" }} />
@@ -49,7 +49,7 @@ export const ViolationsByRuleBarChart: React.FC<Props> = ({ data }) => {
             type="category"
             dataKey="rule_code"
             tick={{ fontSize: 11, fill: "#1e293b", fontWeight: 500 }}
-            width={95}
+            width={115}
           />
           <Tooltip
             content={({ active, payload }) => {
