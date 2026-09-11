@@ -13,7 +13,7 @@ class BaseFieldExtraction(BaseModel):
     confidence: float = Field(default=0.0, ge=0.0, le=1.0)
     bbox: list[float] = Field(default_factory=list)
     present: bool = True
-    source: Literal["gemini", "ocr_fallback"] = "gemini"
+    source: Literal["gemini", "groq", "ocr_fallback"] = "gemini"
 
 
 class StandardTextField(BaseFieldExtraction):

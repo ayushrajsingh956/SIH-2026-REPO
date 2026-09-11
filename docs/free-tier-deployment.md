@@ -80,7 +80,12 @@ This guide details how to deploy the complete **LegalMetro Shield** system into 
    - `DATABASE_URL`: Your Supabase connection string
    - `REDIS_URL`: Your Upstash Redis URL
    - `MINIO_ENDPOINT`, `MINIO_ACCESS_KEY`, `MINIO_SECRET_KEY`, `MINIO_BUCKET`, `MINIO_SECURE`
-   - `GEMINI_API_KEY`: Your Google AI Studio key
+   - `GEMINI_API_KEY`: Your Google AI Studio key (optional if using Groq)
+   - `GROQ_API_KEY`: Your Groq Cloud API key (e.g. `gsk_...`)
+   - `GROQ_BASE_URL`: `https://api.groq.com/openai/v1`
+   - `GROQ_MODEL`: `groq/compound`
+   - `GROQ_FALLBACK_MODELS`: `["groq/compound", "groq/compound-mini", "openai/gpt-oss-120b", "openai/gpt-oss-20b", "qwen/qwen3.8-27b"]`
+   - `OCR_PROVIDER`: `gemini` or `groq` (with automatic cascading failover)
    - `JWT_SECRET`: High-entropy 32-character string
    - `ENV`: `production`
    - `CORS_ORIGINS`: `["https://legalmetro.vercel.app"]`

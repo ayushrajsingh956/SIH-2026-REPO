@@ -288,3 +288,118 @@ class TestScanPipelineIntegration:
                 refreshed_scan = await session.get(Scan, scan.id)
                 assert refreshed_scan.status == "failed"
                 assert "Exceeded max retries" in refreshed_scan.pipeline_meta["error"]
+
+    async def test_gemini_failure_falls_back_to_groq(self, sample_scan_record):
+        scan, _ = sample_scan_record
+        sample_png = create_sample_label_image()
+
+        mock_groq_result = ExtractionResultSchema(
+            fields=ExtractionFields(
+                manufacturer_name=StandardTextField(
+                    raw="Apex Naturals Pvt Ltd",
+                    confidence=0.95,
+                    source="groq",
+                ),
+                net_quantity=NetQuantityField(
+                    raw="500 ml",
+                    value=500.0,
+                    unit="ml",
+                    confidence=0.96,
+                    source="groq",
+                ),
+                mrp=MRPField(
+                    raw="Rs 299.00",
+                    value=299.0,
+                    taxes_inclusive_text="Inclusive of all taxes",
+                    confidence=0.94,
+                    source="groq",
+                ),
+                country_of_origin=StandardTextField(
+                    raw="India",
+                    confidence=0.99,
+                    source="groq",
+                ),
+                consumer_care=ConsumerCareField(
+                    phone=["9876543210"],
+                    confidence=0.92,
+                    source="groq",
+                ),
+            ),
+            raw_text="Apex Naturals 500ml Rs 299",
+        )
+
+        with (
+            patch("app.tasks.scan_pipeline.get_object_bytes", return_value=sample_png),
+            patch(
+                "app.tasks.scan_pipeline.put_object_bytes", return_value="scans/mock/processed.png"
+            ),
+            patch("app.tasks.scan_pipeline.settings.GEMINI_API_KEY", "mock-gemini-key"),
+            patch("app.tasks.scan_pipeline.settings.GROQ_API_KEY", "gsk-mock-groq-key"),
+            patch(
+                "app.tasks.scan_pipeline.extract_with_gemini",
+                side_effect=Exception("Gemini Quota Exceeded 429"),
+            ),
+            patch(
+                "app.tasks.scan_pipeline.extract_with_groq",
+                return_value=(mock_groq_result, 0.95, "groq/compound"),
+            ),
+            patch("app.tasks.scan_pipeline.publish_scan_event"),
+        ):
+            result = scan_pipeline_task(str(scan.id))
+            assert result["status"] == "completed"
+
+            async with AsyncSessionLocal() as session:
+                refreshed_scan = await session.get(Scan, scan.id)
+                assert refreshed_scan.pipeline_meta["provider"] == "groq"
+                assert refreshed_scan.pipeline_meta["model"] == "groq/compound"
+                assert any(
+                    "gemini:" in step for step in refreshed_scan.pipeline_meta["fallback_chain"]
+                )
+                assert any(
+                    "groq:groq/compound" in step
+                    for step in refreshed_scan.pipeline_meta["fallback_chain"]
+                )
+
+    async def test_groq_primary_provider_extraction(self, sample_scan_record):
+        scan, _ = sample_scan_record
+        sample_png = create_sample_label_image()
+
+        mock_groq_result = ExtractionResultSchema(
+            fields=ExtractionFields(
+                country_of_origin=StandardTextField(raw="India", confidence=0.98, source="groq"),
+                net_quantity=NetQuantityField(
+                    value=500.0, unit="ml", confidence=0.95, source="groq"
+                ),
+                mrp=MRPField(
+                    value=100.0,
+                    taxes_inclusive_text="Inclusive of all taxes",
+                    confidence=0.95,
+                    source="groq",
+                ),
+                consumer_care=ConsumerCareField(
+                    phone=["9999999999"], confidence=0.95, source="groq"
+                ),
+            ),
+            raw_text="Sample Groq Extracted Text",
+        )
+
+        with (
+            patch("app.tasks.scan_pipeline.get_object_bytes", return_value=sample_png),
+            patch(
+                "app.tasks.scan_pipeline.put_object_bytes", return_value="scans/mock/processed.png"
+            ),
+            patch("app.tasks.scan_pipeline.settings.OCR_PROVIDER", "groq"),
+            patch("app.tasks.scan_pipeline.settings.GROQ_API_KEY", "gsk-mock-groq-key"),
+            patch(
+                "app.tasks.scan_pipeline.extract_with_groq",
+                return_value=(mock_groq_result, 0.96, "openai/gpt-oss-120b"),
+            ),
+            patch("app.tasks.scan_pipeline.publish_scan_event"),
+        ):
+            result = scan_pipeline_task(str(scan.id))
+            assert result["status"] in ("completed", "needs_review")
+
+            async with AsyncSessionLocal() as session:
+                refreshed_scan = await session.get(Scan, scan.id)
+                assert refreshed_scan.pipeline_meta["provider"] == "groq"
+                assert refreshed_scan.pipeline_meta["model"] == "openai/gpt-oss-120b"

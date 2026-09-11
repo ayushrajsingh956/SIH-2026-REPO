@@ -17,6 +17,7 @@ from app.models.rule_config import RuleConfig
 from app.models.scan import Scan
 from app.models.violation import Violation
 from app.services.extraction.gemini_extractor import extract_with_gemini
+from app.services.extraction.groq_extractor import extract_with_groq
 from app.services.extraction.preprocessor import preprocess_image
 from app.services.extraction.prompts import CURRENT_PROMPT_VERSION
 from app.services.extraction.tesseract_fallback import extract_with_tesseract_fallback
@@ -144,40 +145,99 @@ async def _async_scan_pipeline(task_self: Any, scan_id: str) -> dict[str, Any]:
         )
 
         t_extract_start = time.perf_counter()
-        provider = "gemini"
-        model_name = settings.GEMINI_MODEL or "gemini-2.5-flash"
+        provider = settings.OCR_PROVIDER
+        model_name = ""
         extraction_result = None
         avg_confidence = 0.0
         fallback_used = False
+        fallback_chain: list[str] = []
 
-        use_gemini = bool(settings.GEMINI_API_KEY) and settings.OCR_PROVIDER != "tesseract"
+        # Determine primary provider
+        primary_provider = settings.OCR_PROVIDER
+        if primary_provider == "gemini" and not settings.GEMINI_API_KEY and settings.GROQ_API_KEY:
+            primary_provider = "groq"
 
-        if use_gemini:
+        if primary_provider == "groq" and bool(settings.GROQ_API_KEY):
+            fallback_chain.append(f"groq:{settings.GROQ_MODEL}")
             try:
-                extraction_result, avg_confidence = extract_with_gemini(
+                extraction_result, avg_confidence, model_used = extract_with_groq(
                     processed_buffers,
                     mime_types=["image/png"] * len(processed_buffers),
                 )
-                # Check confidence threshold
+                provider = "groq"
+                model_name = model_used
                 if avg_confidence < 0.5:
                     logger.warning(
-                        "Gemini extraction avg confidence (%s) < 0.5 for scan %s. Falling back to Tesseract.",
+                        "Groq extraction avg confidence (%s) < 0.5 for scan %s.",
                         avg_confidence,
                         scan_id,
                     )
                     fallback_used = True
             except Exception as exc:
-                logger.warning(
-                    "Gemini extraction failed for scan %s: %s. Triggering fallback.", scan_id, exc
-                )
+                logger.warning("Groq extraction failed for scan %s: %s", scan_id, exc)
                 fallback_used = True
+
+            # Secondary fallback to Gemini if Groq failed or had low confidence
+            if (fallback_used or extraction_result is None) and bool(settings.GEMINI_API_KEY):
+                gemini_model = settings.GEMINI_MODEL or "gemini-2.5-flash"
+                fallback_chain.append(f"gemini:{gemini_model}")
+                try:
+                    extraction_result, avg_confidence = extract_with_gemini(
+                        processed_buffers,
+                        mime_types=["image/png"] * len(processed_buffers),
+                    )
+                    provider = "gemini"
+                    model_name = gemini_model
+                    if avg_confidence >= 0.5:
+                        fallback_used = False
+                except Exception as exc:
+                    logger.warning("Gemini secondary fallback failed for scan %s: %s", scan_id, exc)
+
+        elif primary_provider == "gemini" and bool(settings.GEMINI_API_KEY):
+            gemini_model = settings.GEMINI_MODEL or "gemini-2.5-flash"
+            fallback_chain.append(f"gemini:{gemini_model}")
+            try:
+                extraction_result, avg_confidence = extract_with_gemini(
+                    processed_buffers,
+                    mime_types=["image/png"] * len(processed_buffers),
+                )
+                provider = "gemini"
+                model_name = gemini_model
+                if avg_confidence < 0.5:
+                    logger.warning(
+                        "Gemini extraction avg confidence (%s) < 0.5 for scan %s.",
+                        avg_confidence,
+                        scan_id,
+                    )
+                    fallback_used = True
+            except Exception as exc:
+                logger.warning("Gemini extraction failed for scan %s: %s", scan_id, exc)
+                fallback_used = True
+
+            # Secondary fallback to Groq if Gemini failed or had low confidence
+            if (fallback_used or extraction_result is None) and bool(settings.GROQ_API_KEY):
+                fallback_chain.append(f"groq:{settings.GROQ_MODEL}")
+                try:
+                    extraction_result, avg_confidence, model_used = extract_with_groq(
+                        processed_buffers,
+                        mime_types=["image/png"] * len(processed_buffers),
+                    )
+                    provider = "groq"
+                    model_name = model_used
+                    if avg_confidence >= 0.5:
+                        fallback_used = False
+                except Exception as exc:
+                    logger.warning("Groq secondary fallback failed for scan %s: %s", scan_id, exc)
         else:
             fallback_used = True
 
+        # Tertiary fallback to offline Tesseract OCR if cloud extractors failed or are unconfigured
         if fallback_used or extraction_result is None:
+            fallback_chain.append("tesseract:tesseract-ocr-fallback")
             provider = "tesseract"
             model_name = "tesseract-ocr-fallback"
             extraction_result, avg_confidence = extract_with_tesseract_fallback(processed_buffers)
+            fallback_used = True
 
         t_extract_duration = round((time.perf_counter() - t_extract_start) * 1000, 2)
         total_duration = round((time.perf_counter() - t_start) * 1000, 2)
@@ -214,6 +274,7 @@ async def _async_scan_pipeline(task_self: Any, scan_id: str) -> dict[str, Any]:
             "prompt_version": CURRENT_PROMPT_VERSION,
             "avg_confidence": avg_confidence,
             "fallback_used": fallback_used,
+            "fallback_chain": fallback_chain,
             "compliance_score": score,
             "verdict": verdict,
             "violations_count": len(violations),

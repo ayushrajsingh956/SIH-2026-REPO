@@ -66,8 +66,8 @@ Image preprocessing enhances OCR accuracy under challenging field lighting:
 - **Bilateral Filtering**: Noise reduction while preserving edge crispness of typography.
 - **Deskewing**: MinAreaRect orientation correction.
 
-### Step C: Multimodal Extraction (Gemini 2.5 Flash)
-- Preprocessed images are passed to Google Gemini 2.5 Flash using structured output prompts.
+### Step C: Multimodal Extraction (Gemini 2.5 Flash & Groq LLM)
+- Preprocessed images are passed to Google Gemini 2.5 Flash or Groq multi-model vision LLMs using structured output JSON schemas.
 - Extracts Rule 6(1) declarations:
   - `manufacturer_name`, `packer_name`, `importer_name` and respective addresses.
   - `generic_name` (commodity common identity).
@@ -78,9 +78,23 @@ Image preprocessing enhances OCR accuracy under challenging field lighting:
   - `country_of_origin`.
   - `sizes_dimensions` and font height estimates.
 
-### Step D: Tesseract OCR Fallback
-- If Gemini API call fails, times out, or yields average confidence $< 0.50$, the worker automatically invokes local **Tesseract OCR (v5)** with regex-based statutory pattern extractors.
-- `pipeline_meta.fallback_used` is recorded and flagged in the inspection UI.
+### Step D: Groq Multi-Model Fallback & Rate Limiting
+- If Gemini API fails, times out, or when `OCR_PROVIDER="groq"`, the pipeline activates Groq's high-speed inference engine.
+- Supports dual-modality: direct base64 image inspection for vision models, and automated OCR text structuring for text-specialized models.
+- **Dynamic Failover Cascade**: If a model encounters HTTP 429 (Rate Limit Exceeded) or 503 capacity issues, the system automatically falls over across configured model tiers:
+  | Model ID | Requests / Min (RPM) | Requests / Day (RPD) | Tokens / Min (TPM) | Tokens / Day (TPD) |
+  | :--- | :--- | :--- | :--- | :--- |
+  | `groq/compound` *(default)* | 30 | 250 | 70K | No limit |
+  | `groq/compound-mini` | 30 | 250 | 70K | No limit |
+  | `openai/gpt-oss-120b` | 30 | 1K | 8K | 200K |
+  | `openai/gpt-oss-20b` | 30 | 1K | 8K | 200K |
+  | `openai/gpt-oss-safeguard-20b`| 30 | 1K | 8K | 200K |
+  | `qwen/qwen3.6-27b` | 30 | 1K | 8K | 200K |
+  | `qwen/qwen3.8-27b` | 30 | 1K | 8K | 200K |
+
+### Step E: Offline Tesseract OCR Fallback
+- If all cloud LLM calls fail or if both API keys are absent, the worker automatically invokes local **Tesseract OCR (v5)** with regex-based statutory pattern extractors.
+- `pipeline_meta.fallback_used` and `pipeline_meta.fallback_chain` are recorded in the database and audit trail.
 
 ---
 
