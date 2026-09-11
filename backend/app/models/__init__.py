@@ -2,6 +2,7 @@ from app.models.audit_log import AuditLog
 from app.models.base import Base
 from app.models.extraction import Extraction
 from app.models.product import Product
+from app.models.refresh_token import RefreshToken
 from app.models.report import Report
 from app.models.scan import Scan
 from app.models.user import User
@@ -16,4 +17,5 @@ __all__ = [
     "Violation",
     "Report",
     "AuditLog",
+    "RefreshToken",
 ]

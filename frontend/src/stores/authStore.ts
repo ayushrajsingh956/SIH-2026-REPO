@@ -5,8 +5,10 @@ export interface UserProfile {
   name: string;
   email: string;
   role: "admin" | "inspector" | "viewer";
-  district?: string;
-  state?: string;
+  district?: string | null;
+  state?: string | null;
+  is_active: boolean;
+  created_at: string;
 }
 
 interface AuthState {
@@ -17,33 +19,73 @@ interface AuthState {
   login: (tokens: { accessToken: string; refreshToken: string }, user: UserProfile) => void;
   logout: () => void;
   setAccessToken: (token: string) => void;
+  setTokens: (accessToken: string, refreshToken: string) => void;
+  initialize: () => void;
 }
 
+const STORAGE_KEY_USER = "legalmetro_user";
+const STORAGE_KEY_ACCESS = "legalmetro_access_token";
+const STORAGE_KEY_REFRESH = "legalmetro_refresh_token";
+
 export const useAuthStore = create<AuthState>((set) => ({
-  user: {
-    id: "00000000-0000-0000-0000-000000000001",
-    name: "Inspector Sharma",
-    email: "inspector.doca@nic.in",
-    role: "inspector",
-    district: "New Delhi",
-    state: "Delhi",
+  user: null,
+  accessToken: null,
+  refreshToken: null,
+  isAuthenticated: false,
+
+  initialize: () => {
+    try {
+      const storedUser = localStorage.getItem(STORAGE_KEY_USER);
+      const storedAccess = localStorage.getItem(STORAGE_KEY_ACCESS);
+      const storedRefresh = localStorage.getItem(STORAGE_KEY_REFRESH);
+
+      if (storedUser && storedAccess) {
+        set({
+          user: JSON.parse(storedUser),
+          accessToken: storedAccess,
+          refreshToken: storedRefresh,
+          isAuthenticated: true,
+        });
+      }
+    } catch {
+      localStorage.removeItem(STORAGE_KEY_USER);
+      localStorage.removeItem(STORAGE_KEY_ACCESS);
+      localStorage.removeItem(STORAGE_KEY_REFRESH);
+    }
   },
-  accessToken: "stubbed-dev-access-token",
-  refreshToken: "stubbed-dev-refresh-token",
-  isAuthenticated: true, // Stubbed for initial scaffold; toggleable in UI
-  login: (tokens, user) =>
+
+  login: (tokens, user) => {
+    localStorage.setItem(STORAGE_KEY_USER, JSON.stringify(user));
+    localStorage.setItem(STORAGE_KEY_ACCESS, tokens.accessToken);
+    localStorage.setItem(STORAGE_KEY_REFRESH, tokens.refreshToken);
     set({
       user,
       accessToken: tokens.accessToken,
       refreshToken: tokens.refreshToken,
       isAuthenticated: true,
-    }),
-  logout: () =>
+    });
+  },
+
+  logout: () => {
+    localStorage.removeItem(STORAGE_KEY_USER);
+    localStorage.removeItem(STORAGE_KEY_ACCESS);
+    localStorage.removeItem(STORAGE_KEY_REFRESH);
     set({
       user: null,
       accessToken: null,
       refreshToken: null,
       isAuthenticated: false,
-    }),
-  setAccessToken: (token) => set({ accessToken: token }),
+    });
+  },
+
+  setAccessToken: (accessToken) => {
+    localStorage.setItem(STORAGE_KEY_ACCESS, accessToken);
+    set({ accessToken });
+  },
+
+  setTokens: (accessToken, refreshToken) => {
+    localStorage.setItem(STORAGE_KEY_ACCESS, accessToken);
+    localStorage.setItem(STORAGE_KEY_REFRESH, refreshToken);
+    set({ accessToken, refreshToken });
+  },
 }));
