@@ -2,7 +2,7 @@ import uuid
 from datetime import datetime
 from typing import TYPE_CHECKING
 
-from sqlalchemy import DateTime, ForeignKey, Index, String, func
+from sqlalchemy import DateTime, ForeignKey, String, func
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -49,4 +49,5 @@ class RefreshToken(Base, UUIDPrimaryKeyMixin):
     # Relationship
     user: Mapped["User"] = relationship("User")
 
-    __table_args__ = (Index("ix_refresh_tokens_family", "family_id"),)
+    # Index on family_id is created by the migration (ix_refresh_tokens_family_id);
+    # do not duplicate it here.

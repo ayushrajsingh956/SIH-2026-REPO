@@ -6,12 +6,19 @@ from pydantic import BaseModel, ConfigDict, EmailStr, Field
 
 
 class UserRegister(BaseModel):
+    """Public self-registration. Role/activation are always server-assigned."""
+
     name: str = Field(..., min_length=2, max_length=255)
     email: EmailStr
     password: str = Field(..., min_length=8, max_length=128)
-    role: Literal["admin", "inspector", "viewer"] | None = None
     district: str | None = None
     state: str | None = None
+
+
+class AdminUserCreate(UserRegister):
+    """Admin-initiated user creation: arbitrary role, created active."""
+
+    role: Literal["admin", "inspector", "viewer"] = "viewer"
 
 
 class UserLogin(BaseModel):

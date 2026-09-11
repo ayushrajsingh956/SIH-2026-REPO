@@ -1,3 +1,4 @@
+import sys
 from collections.abc import AsyncGenerator
 
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
@@ -5,13 +6,13 @@ from sqlalchemy.pool import NullPool
 
 from app.core.config import settings
 
-# Use NullPool in test/development environments to eliminate cross-loop asyncpg conflicts
-engine = create_async_engine(
-    settings.DATABASE_URL,
-    echo=False,
-    future=True,
-    poolclass=NullPool,
-)
+# NullPool under pytest: eliminates cross-loop asyncpg conflicts in the test suite.
+# All other environments use the default pooled engine.
+_engine_kwargs: dict = {"echo": False, "future": True}
+if settings.ENV == "test" or "pytest" in sys.modules:
+    _engine_kwargs["poolclass"] = NullPool
+
+engine = create_async_engine(settings.DATABASE_URL, **_engine_kwargs)
 
 AsyncSessionLocal = async_sessionmaker(
     bind=engine,

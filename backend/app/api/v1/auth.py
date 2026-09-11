@@ -138,7 +138,7 @@ async def login(
         action="USER_LOGIN",
         entity_type="user",
         entity_id=user.id,
-        detail={"ip": "client", "role": user.role},
+        detail={"role": user.role},
     )
 
     return TokenResponse(
@@ -212,6 +212,7 @@ async def refresh_token(
             status_code=status.HTTP_401_UNAUTHORIZED,
             title="Unauthorized",
             detail="User no longer active",
+            type_url="https://errors.legalmetro.gov.in/account-inactive",
         )
 
     # 4. Rotation: revoke old token, issue new token in SAME family
@@ -268,9 +269,13 @@ async def logout(
 ) -> dict:
     if payload and payload.refresh_token:
         token_digest = hash_token(payload.refresh_token)
+        # Ownership check: a user may only revoke their own tokens
         await db.execute(
             update(RefreshToken)
-            .where(RefreshToken.token_hash == token_digest)
+            .where(
+                RefreshToken.token_hash == token_digest,
+                RefreshToken.user_id == current_user.id,
+            )
             .values(revoked_at=datetime.now(UTC))
         )
     else:

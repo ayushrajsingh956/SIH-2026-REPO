@@ -141,6 +141,58 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/scans": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List scans with pagination and filters */
+        get: operations["list_scans_api_v1_scans_get"];
+        put?: never;
+        /** Upload packaged commodity photos and enqueue compliance scan (Admin/Inspector) */
+        post: operations["create_scan_api_v1_scans_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/scans/url": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Scrape e-commerce product page, extract og:image set, and enqueue scan */
+        post: operations["create_scan_from_url_api_v1_scans_url_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/scans/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Polling endpoint for scan status and results */
+        get: operations["get_scan_detail_api_v1_scans__id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/status": {
         parameters: {
             query?: never;
@@ -152,24 +204,6 @@ export interface paths {
         get: operations["api_status_api_v1_status_get"];
         put?: never;
         post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/scans": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** List scans (All authenticated roles: Admin, Inspector, Viewer) */
-        get: operations["list_scans_stub_api_v1_scans_get"];
-        put?: never;
-        /** Create a new label scan (Inspector & Admin only) */
-        post: operations["create_scan_stub_api_v1_scans_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -197,6 +231,31 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        /**
+         * AdminUserCreate
+         * @description Admin-initiated user creation: arbitrary role, created active.
+         */
+        AdminUserCreate: {
+            /** Name */
+            name: string;
+            /**
+             * Email
+             * Format: email
+             */
+            email: string;
+            /** Password */
+            password: string;
+            /** District */
+            district?: string | null;
+            /** State */
+            state?: string | null;
+            /**
+             * Role
+             * @default viewer
+             * @enum {string}
+             */
+            role: "admin" | "inspector" | "viewer";
+        };
         /** AuditLogListResponse */
         AuditLogListResponse: {
             /** Items */
@@ -233,6 +292,23 @@ export interface components {
              */
             created_at: string;
         };
+        /** Body_create_scan_api_v1_scans_post */
+        Body_create_scan_api_v1_scans_post: {
+            /** Images */
+            images: string[];
+            /**
+             * Mode
+             * @default retail
+             */
+            mode: string;
+            /**
+             * Font Check Mode
+             * @default relative
+             */
+            font_check_mode: string;
+            /** Surface Area Cm2 */
+            surface_area_cm2?: number | null;
+        };
         /** HTTPValidationError */
         HTTPValidationError: {
             /** Detail */
@@ -261,6 +337,90 @@ export interface components {
         RefreshTokenRequest: {
             /** Refresh Token */
             refresh_token: string;
+        };
+        /** ScanCreateResponse */
+        ScanCreateResponse: {
+            /** Scan Id */
+            scan_id: string;
+            /**
+             * Status
+             * @default queued
+             */
+            status: string;
+            /**
+             * Message
+             * @default Scan initiated successfully
+             */
+            message: string;
+            /**
+             * Images Count
+             * @default 1
+             */
+            images_count: number;
+        };
+        /** ScanDetailResponse */
+        ScanDetailResponse: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Product Id */
+            product_id?: string | null;
+            /**
+             * Scanned By
+             * Format: uuid
+             */
+            scanned_by: string;
+            /** Mode */
+            mode: string;
+            /** Status */
+            status: string;
+            /** Verdict */
+            verdict?: string | null;
+            /** Compliance Score */
+            compliance_score?: number | null;
+            /** Font Check Mode */
+            font_check_mode: string;
+            /** Surface Area Cm2 */
+            surface_area_cm2?: number | null;
+            /** Image Urls */
+            image_urls: string[];
+            /** Presigned Image Urls */
+            presigned_image_urls?: string[];
+            /** Pipeline Meta */
+            pipeline_meta?: {
+                [key: string]: unknown;
+            } | null;
+            /**
+             * Scanned At
+             * Format: date-time
+             */
+            scanned_at: string;
+            /** Extraction */
+            extraction?: {
+                [key: string]: unknown;
+            } | null;
+        };
+        /** ScanListResponse */
+        ScanListResponse: {
+            /** Items */
+            items: components["schemas"]["ScanDetailResponse"][];
+            /** Total */
+            total: number;
+        };
+        /** ScanUrlRequest */
+        ScanUrlRequest: {
+            /** Url */
+            url: string;
+            /**
+             * Font Check Mode
+             * @default relative
+             * @enum {string}
+             */
+            font_check_mode: "surface_area" | "reference_object" | "relative";
+            /** Surface Area Cm2 */
+            surface_area_cm2?: number | null;
         };
         /** TokenResponse */
         TokenResponse: {
@@ -298,7 +458,10 @@ export interface components {
             /** Password */
             password: string;
         };
-        /** UserRegister */
+        /**
+         * UserRegister
+         * @description Public self-registration. Role/activation are always server-assigned.
+         */
         UserRegister: {
             /** Name */
             name: string;
@@ -309,8 +472,6 @@ export interface components {
             email: string;
             /** Password */
             password: string;
-            /** Role */
-            role?: ("admin" | "inspector" | "viewer") | null;
             /** District */
             district?: string | null;
             /** State */
@@ -574,7 +735,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["UserRegister"];
+                "application/json": components["schemas"]["AdminUserCreate"];
             };
         };
         responses: {
@@ -667,51 +828,136 @@ export interface operations {
             };
         };
     };
+    list_scans_api_v1_scans_get: {
+        parameters: {
+            query?: {
+                limit?: number;
+                offset?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ScanListResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_scan_api_v1_scans_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["Body_create_scan_api_v1_scans_post"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ScanCreateResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_scan_from_url_api_v1_scans_url_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ScanUrlRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ScanCreateResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_scan_detail_api_v1_scans__id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ScanDetailResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     api_status_api_v1_status_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
-                };
-            };
-        };
-    };
-    list_scans_stub_api_v1_scans_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
-                };
-            };
-        };
-    };
-    create_scan_stub_api_v1_scans_post: {
         parameters: {
             query?: never;
             header?: never;

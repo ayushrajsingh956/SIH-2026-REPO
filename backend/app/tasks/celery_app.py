@@ -17,6 +17,7 @@ celery_app.conf.update(
     task_track_started=True,
     task_time_limit=300,  # 5 min hard limit for OCR/AI extraction
     worker_prefetch_multiplier=1,
+    imports=["app.tasks.scan_pipeline"],
 )
 
 

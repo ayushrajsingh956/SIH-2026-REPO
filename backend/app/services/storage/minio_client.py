@@ -45,3 +45,61 @@ def ensure_bucket_exists(bucket_name: str | None = None) -> bool:
     except S3Error as err:
         logger.error("Failed to ensure MinIO bucket '%s': %s", bucket, err)
         return False
+
+
+def put_object_bytes(
+    object_name: str,
+    data: bytes,
+    content_type: str,
+    bucket_name: str | None = None,
+) -> str:
+    """Uploads bytes directly to MinIO with strict content-type enforcement.
+
+    Returns the object name / key.
+    """
+    bucket = bucket_name or settings.MINIO_BUCKET
+    ensure_bucket_exists(bucket)
+
+    import io
+
+    client = get_minio_client()
+    data_stream = io.BytesIO(data)
+    client.put_object(
+        bucket_name=bucket,
+        object_name=object_name,
+        data=data_stream,
+        length=len(data),
+        content_type=content_type,
+    )
+    logger.debug("Successfully uploaded %s to bucket %s (%d bytes)", object_name, bucket, len(data))
+    return object_name
+
+
+def get_object_bytes(object_name: str, bucket_name: str | None = None) -> bytes:
+    """Retrieves object raw bytes from MinIO."""
+    bucket = bucket_name or settings.MINIO_BUCKET
+    client = get_minio_client()
+
+    response = client.get_object(bucket_name=bucket, object_name=object_name)
+    try:
+        return response.read()
+    finally:
+        response.close()
+        response.release_conn()
+
+
+def presign_get_url(
+    object_name: str,
+    bucket_name: str | None = None,
+    expires_seconds: int = 3600,
+) -> str:
+    """Generates a presigned GET URL for client-side download/viewing."""
+    from datetime import timedelta
+
+    bucket = bucket_name or settings.MINIO_BUCKET
+    client = get_minio_client()
+    return client.presigned_get_object(
+        bucket_name=bucket,
+        object_name=object_name,
+        expires=timedelta(seconds=expires_seconds),
+    )

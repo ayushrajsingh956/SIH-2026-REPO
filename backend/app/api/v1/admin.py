@@ -2,13 +2,14 @@ import uuid
 from typing import Literal
 
 from fastapi import APIRouter, Depends, Query, status
-from sqlalchemy import func, select
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.audit import record_audit_event
 from app.core.database import get_db
 from app.core.deps import require_role
 from app.core.exceptions import ProblemDetailException
+from app.core.pagination import paginate
 from app.core.security import get_password_hash
 from app.models.audit_log import AuditLog
 from app.models.user import User
@@ -17,7 +18,7 @@ from app.schemas.admin import (
     AuditLogResponse,
     UserListResponse,
 )
-from app.schemas.auth import UserRegister, UserResponse, UserUpdate
+from app.schemas.auth import AdminUserCreate, UserResponse, UserUpdate
 
 router = APIRouter(
     prefix="/admin",
@@ -40,25 +41,15 @@ async def list_users(
     db: AsyncSession = Depends(get_db),
 ) -> UserListResponse:
     query = select(User)
-    count_query = select(func.count(User.id))
 
     if role:
         query = query.where(User.role == role)
-        count_query = count_query.where(User.role == role)
     if is_active is not None:
         query = query.where(User.is_active == is_active)
-        count_query = count_query.where(User.is_active == is_active)
     if q:
-        search_filter = User.name.ilike(f"%{q}%") | User.email.ilike(f"%{q}%")
-        query = query.where(search_filter)
-        count_query = count_query.where(search_filter)
+        query = query.where(User.name.ilike(f"%{q}%") | User.email.ilike(f"%{q}%"))
 
-    total_res = await db.execute(count_query)
-    total = total_res.scalar() or 0
-
-    offset = (page - 1) * limit
-    users_res = await db.execute(query.order_by(User.created_at.desc()).offset(offset).limit(limit))
-    users = users_res.scalars().all()
+    users, total = await paginate(db, query, page, limit, User.created_at.desc())
 
     return UserListResponse(
         items=[UserResponse.model_validate(u) for u in users],
@@ -75,7 +66,7 @@ async def list_users(
     summary="Create a new user with any role (Admin only)",
 )
 async def create_user(
-    user_in: UserRegister,
+    user_in: AdminUserCreate,
     admin_user: User = Depends(require_role("admin")),
     db: AsyncSession = Depends(get_db),
 ) -> User:
@@ -91,7 +82,7 @@ async def create_user(
         name=user_in.name,
         email=user_in.email,
         password_hash=get_password_hash(user_in.password),
-        role=user_in.role or "viewer",
+        role=user_in.role,
         district=user_in.district,
         state=user_in.state,
         is_active=True,
@@ -174,23 +165,13 @@ async def get_audit_log(
     db: AsyncSession = Depends(get_db),
 ) -> AuditLogListResponse:
     query = select(AuditLog)
-    count_query = select(func.count(AuditLog.id))
 
     if action:
         query = query.where(AuditLog.action == action)
-        count_query = count_query.where(AuditLog.action == action)
     if user_id:
         query = query.where(AuditLog.user_id == user_id)
-        count_query = count_query.where(AuditLog.user_id == user_id)
 
-    total_res = await db.execute(count_query)
-    total = total_res.scalar() or 0
-
-    offset = (page - 1) * limit
-    logs_res = await db.execute(
-        query.order_by(AuditLog.created_at.desc()).offset(offset).limit(limit)
-    )
-    logs = logs_res.scalars().all()
+    logs, total = await paginate(db, query, page, limit, AuditLog.created_at.desc())
 
     return AuditLogListResponse(
         items=[AuditLogResponse.model_validate(log) for log in logs],

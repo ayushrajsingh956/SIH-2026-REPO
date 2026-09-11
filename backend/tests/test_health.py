@@ -1,10 +1,8 @@
 from unittest.mock import AsyncMock, patch
 
-import pytest
 from httpx import AsyncClient
 
 
-@pytest.mark.asyncio
 async def test_healthz_healthy(async_client: AsyncClient):
     with (
         patch("app.main.AsyncSessionLocal") as mock_session_local,
@@ -34,7 +32,6 @@ async def test_healthz_healthy(async_client: AsyncClient):
         assert data["dependencies"]["storage"]["status"] == "ok"
 
 
-@pytest.mark.asyncio
 async def test_healthz_unhealthy(async_client: AsyncClient):
     with (
         patch("app.main.AsyncSessionLocal", side_effect=Exception("DB Down")),
@@ -50,7 +47,6 @@ async def test_healthz_unhealthy(async_client: AsyncClient):
         assert data["dependencies"]["storage"]["status"] == "unhealthy"
 
 
-@pytest.mark.asyncio
 async def test_rfc7807_not_found(async_client: AsyncClient):
     response = await async_client.get("/api/v1/non-existent-endpoint")
     assert response.status_code == 404
@@ -63,7 +59,6 @@ async def test_rfc7807_not_found(async_client: AsyncClient):
     assert "instance" in data
 
 
-@pytest.mark.asyncio
 async def test_api_v1_status(async_client: AsyncClient):
     response = await async_client.get("/api/v1/status")
     assert response.status_code == 200

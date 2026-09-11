@@ -1,0 +1,280 @@
+import asyncio
+import concurrent.futures
+import json
+import logging
+import time
+import uuid
+from typing import Any
+
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+from sqlalchemy.pool import NullPool
+
+from app.core.config import settings
+from app.models.extraction import Extraction
+from app.models.scan import Scan
+from app.services.extraction.gemini_extractor import extract_with_gemini
+from app.services.extraction.preprocessor import preprocess_image
+from app.services.extraction.tesseract_fallback import extract_with_tesseract_fallback
+from app.services.storage.minio_client import get_object_bytes, put_object_bytes
+from app.services.storage.security import sanitize_storage_key
+from app.tasks.celery_app import celery_app
+
+logger = logging.getLogger(__name__)
+
+_task_engine = None
+_TaskSessionLocal = None
+
+
+def get_task_session() -> AsyncSession:
+    """Provides a dedicated async session with NullPool for Celery worker processes."""
+    global _task_engine, _TaskSessionLocal
+    if _task_engine is None:
+        _task_engine = create_async_engine(settings.DATABASE_URL, poolclass=NullPool)
+        _TaskSessionLocal = async_sessionmaker(
+            bind=_task_engine, class_=AsyncSession, expire_on_commit=False, autoflush=False
+        )
+    return _TaskSessionLocal()
+
+
+def run_async(coro: Any) -> Any:
+    """Safely executes an async coroutine from synchronous Celery task or async test environment."""
+    try:
+        loop = asyncio.get_running_loop()
+    except RuntimeError:
+        loop = None
+
+    if loop and loop.is_running():
+        with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
+            future = executor.submit(asyncio.run, coro)
+            return future.result()
+    else:
+        return asyncio.run(coro)
+
+
+def publish_scan_event(scan_id: str, event_data: dict[str, Any]) -> None:
+    """Publishes real-time scan event to Redis pub/sub channel for WebSocket clients."""
+    try:
+        import redis
+
+        r = redis.from_url(settings.REDIS_URL)
+        r.publish(f"scan:{scan_id}:events", json.dumps(event_data))
+        r.close()
+    except Exception as exc:
+        logger.debug("Failed to publish scan event to Redis: %s", exc)
+
+
+async def _async_scan_pipeline(task_self: Any, scan_id: str) -> dict[str, Any]:
+    """Async execution body for scan pipeline."""
+    t_start = time.perf_counter()
+    scan_uuid = uuid.UUID(scan_id)
+
+    async with get_task_session() as session:
+        # 1. Fetch scan
+        stmt = select(Scan).where(Scan.id == scan_uuid)
+        result = await session.execute(stmt)
+        scan = result.scalar_one_or_none()
+
+        if not scan:
+            logger.error("Scan %s not found in database.", scan_id)
+            return {"status": "error", "message": "Scan not found"}
+
+        # 2. Update status -> processing (preprocessing stage)
+        scan.status = "processing"
+        scan.pipeline_meta = {
+            "stage": "preprocessing",
+            "attempt": task_self.request.retries + 1 if task_self else 1,
+        }
+        await session.commit()
+        publish_scan_event(
+            scan_id, {"scan_id": scan_id, "status": "processing", "stage": "preprocessing"}
+        )
+
+        # 3. Step A: Preprocess images
+        t_prep_start = time.perf_counter()
+        original_keys: list[str] = scan.image_urls or []
+        if not original_keys:
+            raise ValueError("Scan contains no original image URLs.")
+
+        processed_keys: list[str] = []
+        processed_buffers: list[bytes] = []
+        prep_metadata: list[dict[str, Any]] = []
+
+        for idx, orig_key in enumerate(original_keys):
+            # Fetch from MinIO
+            raw_bytes = get_object_bytes(orig_key)
+            # Preprocess with OpenCV
+            proc_bytes, meta = preprocess_image(raw_bytes)
+            # Store processed image in MinIO
+            proc_key = sanitize_storage_key(scan_uuid, "processed", idx, "png")
+            put_object_bytes(proc_key, proc_bytes, "image/png")
+
+            processed_keys.append(proc_key)
+            processed_buffers.append(proc_bytes)
+            prep_metadata.append(meta)
+
+        t_prep_duration = round((time.perf_counter() - t_prep_start) * 1000, 2)
+
+        # 4. Step B & C: Extraction with Gemini + Tesseract Fallback
+        scan.pipeline_meta["stage"] = "extracting"
+        await session.commit()
+        publish_scan_event(
+            scan_id, {"scan_id": scan_id, "status": "processing", "stage": "extracting"}
+        )
+
+        t_extract_start = time.perf_counter()
+        provider = "gemini"
+        model_name = settings.GEMINI_MODEL or "gemini-2.5-flash"
+        extraction_result = None
+        avg_confidence = 0.0
+        fallback_used = False
+
+        use_gemini = bool(settings.GEMINI_API_KEY) and settings.OCR_PROVIDER != "tesseract"
+
+        if use_gemini:
+            try:
+                extraction_result, avg_confidence = extract_with_gemini(
+                    processed_buffers,
+                    mime_types=["image/png"] * len(processed_buffers),
+                )
+                # Check confidence threshold
+                if avg_confidence < 0.5:
+                    logger.warning(
+                        "Gemini extraction avg confidence (%s) < 0.5 for scan %s. Falling back to Tesseract.",
+                        avg_confidence,
+                        scan_id,
+                    )
+                    fallback_used = True
+            except Exception as exc:
+                logger.warning(
+                    "Gemini extraction failed for scan %s: %s. Triggering fallback.", scan_id, exc
+                )
+                fallback_used = True
+        else:
+            fallback_used = True
+
+        if fallback_used or extraction_result is None:
+            provider = "tesseract"
+            model_name = "tesseract-ocr-fallback"
+            extraction_result, avg_confidence = extract_with_tesseract_fallback(processed_buffers)
+
+        t_extract_duration = round((time.perf_counter() - t_extract_start) * 1000, 2)
+        total_duration = round((time.perf_counter() - t_start) * 1000, 2)
+
+        # 5. Status Transition: completed / needs_review
+        if fallback_used or avg_confidence < 0.6:
+            final_status = "needs_review"
+        else:
+            final_status = "completed"
+
+        pipeline_meta = {
+            "model": model_name,
+            "provider": provider,
+            "avg_confidence": avg_confidence,
+            "fallback_used": fallback_used,
+            "durations": {
+                "preprocess_ms": t_prep_duration,
+                "extract_ms": t_extract_duration,
+                "total_ms": total_duration,
+            },
+            "processed_image_urls": processed_keys,
+            "preprocessing_details": prep_metadata,
+        }
+
+        # 6. Persist Extraction & Update Scan
+        # Delete existing extraction if retry
+        existing_extr = await session.execute(
+            select(Extraction).where(Extraction.scan_id == scan_uuid)
+        )
+        existing_obj = existing_extr.scalar_one_or_none()
+        if existing_obj:
+            await session.delete(existing_obj)
+
+        extraction = Extraction(
+            scan_id=scan.id,
+            fields=extraction_result.fields.model_dump(),
+            raw_text=extraction_result.raw_text,
+            model=model_name,
+        )
+        session.add(extraction)
+
+        scan.status = final_status
+        scan.pipeline_meta = pipeline_meta
+        await session.commit()
+
+        # 7. Notify client of completion
+        terminal_event = {
+            "scan_id": scan_id,
+            "status": final_status,
+            "pipeline_meta": pipeline_meta,
+        }
+        publish_scan_event(scan_id, terminal_event)
+
+        logger.info(
+            "Scan %s completed with status=%s, provider=%s, conf=%.2f",
+            scan_id,
+            final_status,
+            provider,
+            avg_confidence,
+        )
+        return terminal_event
+
+
+async def _async_mark_scan_failed(scan_id: str, error_msg: str) -> None:
+    """Updates scan status to failed on unrecoverable error."""
+    try:
+        scan_uuid = uuid.UUID(scan_id)
+        async with get_task_session() as session:
+            stmt = select(Scan).where(Scan.id == scan_uuid)
+            result = await session.execute(stmt)
+            scan = result.scalar_one_or_none()
+            if scan:
+                scan.status = "failed"
+                scan.pipeline_meta = {
+                    **(scan.pipeline_meta or {}),
+                    "error": error_msg,
+                    "failed_at": time.time(),
+                }
+                await session.commit()
+                publish_scan_event(
+                    scan_id, {"scan_id": scan_id, "status": "failed", "error": error_msg}
+                )
+    except Exception as exc:
+        logger.error("Failed to mark scan %s as failed: %s", scan_id, exc)
+
+
+@celery_app.task(
+    bind=True,
+    max_retries=3,
+    default_retry_delay=5,
+    name="scan_pipeline",
+)
+def scan_pipeline_task(self, scan_id: str) -> dict[str, Any]:
+    """Celery task executing the complete label scan pipeline.
+
+    Safe against worker crashes:
+    - Retries up to 3 times on transient errors
+    - Marks scan 'failed' upon exhausted retries or poison image
+    """
+    logger.info(
+        "Starting scan_pipeline for scan_id=%s (attempt %d/%d)",
+        scan_id,
+        self.request.retries + 1,
+        self.max_retries,
+    )
+    try:
+        return run_async(_async_scan_pipeline(self, scan_id))
+    except ValueError as val_err:
+        # Poison image or bad input: unrecoverable, do not retry, mark failed
+        logger.error("Poison image or unrecoverable error in scan %s: %s", scan_id, val_err)
+        run_async(_async_mark_scan_failed(scan_id, str(val_err)))
+        return {"scan_id": scan_id, "status": "failed", "error": str(val_err)}
+    except Exception as exc:
+        logger.exception("Unexpected error processing scan %s: %s", scan_id, exc)
+        if self.request.retries < self.max_retries:
+            logger.warning("Retrying scan %s (retry %d)...", scan_id, self.request.retries + 1)
+            raise self.retry(exc=exc) from exc
+        # All retries exhausted -> mark failed
+        err_msg = f"Exceeded max retries: {exc}"
+        run_async(_async_mark_scan_failed(scan_id, err_msg))
+        return {"scan_id": scan_id, "status": "failed", "error": err_msg}

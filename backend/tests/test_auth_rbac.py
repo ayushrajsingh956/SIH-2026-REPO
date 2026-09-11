@@ -1,6 +1,6 @@
 import uuid
+from unittest.mock import patch
 
-import pytest
 from httpx import AsyncClient
 
 from app.core.database import AsyncSessionLocal
@@ -30,7 +30,6 @@ async def create_user_helper(
         return user
 
 
-@pytest.mark.asyncio
 async def test_public_self_registration_creates_pending_viewer(
     async_client: AsyncClient,
 ):
@@ -52,7 +51,6 @@ async def test_public_self_registration_creates_pending_viewer(
     assert data["is_active"] is False
 
 
-@pytest.mark.asyncio
 async def test_duplicate_registration_returns_409(
     async_client: AsyncClient,
 ):
@@ -71,7 +69,6 @@ async def test_duplicate_registration_returns_409(
     assert response.headers["content-type"] == "application/problem+json"
 
 
-@pytest.mark.asyncio
 async def test_login_and_token_issuance(
     async_client: AsyncClient,
 ):
@@ -98,7 +95,6 @@ async def test_login_and_token_issuance(
     assert tokens["user"]["role"] == "inspector"
 
 
-@pytest.mark.asyncio
 async def test_inactive_user_login_returns_403_rfc7807(
     async_client: AsyncClient,
 ):
@@ -115,7 +111,6 @@ async def test_inactive_user_login_returns_403_rfc7807(
     assert "Pending Approval" in data["title"]
 
 
-@pytest.mark.asyncio
 async def test_token_rotation_and_replay_family_revocation(
     async_client: AsyncClient,
 ):
@@ -155,7 +150,6 @@ async def test_token_rotation_and_replay_family_revocation(
     assert compromised_res.status_code == 401
 
 
-@pytest.mark.asyncio
 async def test_rbac_permission_matrix(
     async_client: AsyncClient,
 ):
@@ -201,9 +195,35 @@ async def test_rbac_permission_matrix(
     ).status_code == 403
 
     # B. Scans write (Inspector & Admin only)
-    assert (await async_client.post("/api/v1/scans", headers=admin_headers)).status_code == 200
-    assert (await async_client.post("/api/v1/scans", headers=inspector_headers)).status_code == 200
-    assert (await async_client.post("/api/v1/scans", headers=viewer_headers)).status_code == 403
+    dummy_png = (
+        b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01\x00\x00\x00\x01\x08\x06\x00\x00\x00\x1f\x15c4"
+        b"\x00\x00\x00\nIDATx\x9cc\x00\x01\x00\x00\x05\x00\x01\r\n-\xb4\x00\x00\x00\x00IEND\xaeB`\x82"
+    )
+    with (
+        patch("app.api.v1.scans.put_object_bytes", return_value="mock"),
+        patch("app.api.v1.scans.scan_pipeline_task.delay"),
+    ):
+        assert (
+            await async_client.post(
+                "/api/v1/scans",
+                headers=admin_headers,
+                files=[("images", ("label.png", dummy_png, "image/png"))],
+            )
+        ).status_code == 202
+        assert (
+            await async_client.post(
+                "/api/v1/scans",
+                headers=inspector_headers,
+                files=[("images", ("label.png", dummy_png, "image/png"))],
+            )
+        ).status_code == 202
+        assert (
+            await async_client.post(
+                "/api/v1/scans",
+                headers=viewer_headers,
+                files=[("images", ("label.png", dummy_png, "image/png"))],
+            )
+        ).status_code == 403
 
     # C. Scans read (All authenticated roles)
     assert (await async_client.get("/api/v1/scans", headers=admin_headers)).status_code == 200
@@ -212,7 +232,6 @@ async def test_rbac_permission_matrix(
     assert (await async_client.get("/api/v1/scans")).status_code == 401
 
 
-@pytest.mark.asyncio
 async def test_admin_user_crud_and_audit_log(
     async_client: AsyncClient,
 ):
@@ -263,3 +282,117 @@ async def test_admin_user_crud_and_audit_log(
     actions = [item["action"] for item in audit_items]
     assert "ADMIN_CREATE_USER" in actions
     assert "ADMIN_UPDATE_USER" in actions
+
+
+async def test_admin_token_can_create_inspector(async_client: AsyncClient):
+    """Registration matrix: admin token + /admin/users -> arbitrary role, active."""
+    admin_email = f"admin_mx_{uuid.uuid4().hex[:8]}@example.com"
+    await create_user_helper(admin_email, role="admin", password="Password123!")
+    admin_token = (
+        await async_client.post(
+            "/api/v1/auth/login",
+            json={"email": admin_email, "password": "Password123!"},
+        )
+    ).json()["access_token"]
+
+    res = await async_client.post(
+        "/api/v1/admin/users",
+        headers={"Authorization": f"Bearer {admin_token}"},
+        json={
+            "name": "Matrix Inspector",
+            "email": f"mx_inspector_{uuid.uuid4().hex[:8]}@example.com",
+            "password": "InspectorPass123!",
+            "role": "inspector",
+        },
+    )
+    assert res.status_code == 201
+    assert res.json()["role"] == "inspector"
+    assert res.json()["is_active"] is True
+
+
+async def test_non_admin_cannot_elevate_role_via_register(async_client: AsyncClient):
+    """Registration matrix: viewer/inspector tokens get no role assignment either."""
+    for role in ("viewer", "inspector"):
+        email = f"elev_{role}_{uuid.uuid4().hex[:8]}@example.com"
+        await create_user_helper(email, role=role, password="Password123!")
+        token = (
+            await async_client.post(
+                "/api/v1/auth/login",
+                json={"email": email, "password": "Password123!"},
+            )
+        ).json()["access_token"]
+
+        res = await async_client.post(
+            "/api/v1/auth/register",
+            headers={"Authorization": f"Bearer {token}"},
+            json={
+                "name": "Escalation Attempt",
+                "email": f"new_{role}_{uuid.uuid4().hex[:8]}@example.com",
+                "password": "Password123!",
+                "role": "admin",
+            },
+        )
+        assert res.status_code == 201
+        assert res.json()["role"] == "viewer", f"{role} must not be able to assign admin"
+        assert res.json()["is_active"] is False
+
+
+async def test_logout_revokes_refresh_token_server_side(async_client: AsyncClient):
+    """After POST /auth/logout, the refresh token must be unusable."""
+    email = f"logout_{uuid.uuid4().hex[:8]}@example.com"
+    await create_user_helper(email, role="inspector", password="Pass1234!")
+
+    login_res = await async_client.post(
+        "/api/v1/auth/login",
+        json={"email": email, "password": "Pass1234!"},
+    )
+    tokens = login_res.json()
+    headers = {"Authorization": f"Bearer {tokens['access_token']}"}
+
+    logout_res = await async_client.post(
+        "/api/v1/auth/logout",
+        headers=headers,
+        json={"refresh_token": tokens["refresh_token"]},
+    )
+    assert logout_res.status_code == 200
+
+    replay_res = await async_client.post(
+        "/api/v1/auth/refresh",
+        json={"refresh_token": tokens["refresh_token"]},
+    )
+    assert replay_res.status_code == 401
+
+
+async def test_logout_cannot_revoke_other_users_token(async_client: AsyncClient):
+    """Security: a user submitting another user's refresh token must not revoke it."""
+    victim_email = f"victim_{uuid.uuid4().hex[:8]}@example.com"
+    attacker_email = f"attacker_{uuid.uuid4().hex[:8]}@example.com"
+    await create_user_helper(victim_email, role="viewer", password="Pass1234!")
+    await create_user_helper(attacker_email, role="viewer", password="Pass1234!")
+
+    victim_tokens = (
+        await async_client.post(
+            "/api/v1/auth/login",
+            json={"email": victim_email, "password": "Pass1234!"},
+        )
+    ).json()
+    attacker_tokens = (
+        await async_client.post(
+            "/api/v1/auth/login",
+            json={"email": attacker_email, "password": "Pass1234!"},
+        )
+    ).json()
+
+    attacker_headers = {"Authorization": f"Bearer {attacker_tokens['access_token']}"}
+    await async_client.post(
+        "/api/v1/auth/logout",
+        headers=attacker_headers,
+        json={"refresh_token": victim_tokens["refresh_token"]},
+    )
+
+    # Victim's token must still work
+    victim_res = await async_client.post(
+        "/api/v1/auth/refresh",
+        json={"refresh_token": victim_tokens["refresh_token"]},
+    )
+    assert victim_res.status_code == 200

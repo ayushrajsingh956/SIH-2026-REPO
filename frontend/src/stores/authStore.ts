@@ -18,7 +18,6 @@ interface AuthState {
   isAuthenticated: boolean;
   login: (tokens: { accessToken: string; refreshToken: string }, user: UserProfile) => void;
   logout: () => void;
-  setAccessToken: (token: string) => void;
   setTokens: (accessToken: string, refreshToken: string) => void;
   initialize: () => void;
 }
@@ -26,6 +25,12 @@ interface AuthState {
 const STORAGE_KEY_USER = "legalmetro_user";
 const STORAGE_KEY_ACCESS = "legalmetro_access_token";
 const STORAGE_KEY_REFRESH = "legalmetro_refresh_token";
+
+const STORAGE_KEYS = [STORAGE_KEY_USER, STORAGE_KEY_ACCESS, STORAGE_KEY_REFRESH] as const;
+
+const clearPersistedAuth = () => {
+  STORAGE_KEYS.forEach((key) => localStorage.removeItem(key));
+};
 
 export const useAuthStore = create<AuthState>((set) => ({
   user: null,
@@ -48,9 +53,7 @@ export const useAuthStore = create<AuthState>((set) => ({
         });
       }
     } catch {
-      localStorage.removeItem(STORAGE_KEY_USER);
-      localStorage.removeItem(STORAGE_KEY_ACCESS);
-      localStorage.removeItem(STORAGE_KEY_REFRESH);
+      clearPersistedAuth();
     }
   },
 
@@ -67,20 +70,13 @@ export const useAuthStore = create<AuthState>((set) => ({
   },
 
   logout: () => {
-    localStorage.removeItem(STORAGE_KEY_USER);
-    localStorage.removeItem(STORAGE_KEY_ACCESS);
-    localStorage.removeItem(STORAGE_KEY_REFRESH);
+    clearPersistedAuth();
     set({
       user: null,
       accessToken: null,
       refreshToken: null,
       isAuthenticated: false,
     });
-  },
-
-  setAccessToken: (accessToken) => {
-    localStorage.setItem(STORAGE_KEY_ACCESS, accessToken);
-    set({ accessToken });
   },
 
   setTokens: (accessToken, refreshToken) => {

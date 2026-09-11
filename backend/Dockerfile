@@ -2,11 +2,17 @@ FROM python:3.12-slim
 
 WORKDIR /app
 
-# Install system dependencies (including curl for healthcheck)
+# Install system dependencies (including curl, libmagic, tesseract, opencv dependencies)
 RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
     build-essential \
     libpq-dev \
+    libmagic1 \
+    file \
+    tesseract-ocr \
+    tesseract-ocr-eng \
+    libgl1 \
+    libglib2.0-0 \
     && rm -rf /var/lib/apt/lists/*
 
 # Install uv

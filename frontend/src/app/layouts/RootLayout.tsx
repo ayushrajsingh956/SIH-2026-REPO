@@ -2,12 +2,19 @@ import React from "react";
 import { Link, Outlet, useNavigate } from "react-router-dom";
 import { ShieldCheck, LogOut, Package, AlertTriangle, FileText, LayoutDashboard } from "lucide-react";
 import { useAuthStore } from "@/stores/authStore";
+import { apiClient } from "@/services/api";
 
 export const RootLayout: React.FC = () => {
   const { user, isAuthenticated, logout } = useAuthStore();
   const navigate = useNavigate();
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    // Revoke the refresh token server-side before clearing local state
+    try {
+      await apiClient.post("/api/v1/auth/logout");
+    } catch {
+      // Token may already be invalid; local cleanup must happen regardless
+    }
     logout();
     navigate("/login");
   };
@@ -88,7 +95,7 @@ export const RootLayout: React.FC = () => {
                   </div>
                 </div>
                 <button
-                  onClick={handleLogout}
+                  onClick={() => void handleLogout()}
                   className="p-2 text-slate-500 hover:text-red-600 hover:bg-red-50 rounded-md transition-colors"
                   title="Logout"
                 >

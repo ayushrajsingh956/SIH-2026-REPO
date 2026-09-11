@@ -34,6 +34,7 @@ async def get_current_user(
             status_code=status.HTTP_401_UNAUTHORIZED,
             title="Unauthorized",
             detail="Token subject missing",
+            type_url="https://errors.legalmetro.gov.in/invalid-token",
         )
 
     try:
@@ -43,6 +44,7 @@ async def get_current_user(
             status_code=status.HTTP_401_UNAUTHORIZED,
             title="Unauthorized",
             detail="Invalid user ID in token",
+            type_url="https://errors.legalmetro.gov.in/invalid-token",
         ) from err
 
     result = await db.execute(select(User).where(User.id == user_uuid))
@@ -53,6 +55,7 @@ async def get_current_user(
             status_code=status.HTTP_401_UNAUTHORIZED,
             title="Unauthorized",
             detail="User no longer exists",
+            type_url="https://errors.legalmetro.gov.in/invalid-token",
         )
 
     if not user.is_active:
@@ -74,7 +77,9 @@ async def get_optional_current_user(
         return None
     try:
         return await get_current_user(token=token, db=db)
-    except Exception:
+    except ProblemDetailException:
+        # Bad/expired token or deactivated account: treat as anonymous.
+        # DB outages must propagate — only auth failures are swallowed.
         return None
 
 
