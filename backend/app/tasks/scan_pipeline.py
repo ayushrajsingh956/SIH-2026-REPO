@@ -8,6 +8,7 @@ from typing import Any
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+from sqlalchemy.orm.attributes import flag_modified
 from sqlalchemy.pool import NullPool
 
 from app.core.config import settings
@@ -17,16 +18,19 @@ from app.models.scan import Scan
 from app.models.violation import Violation
 from app.services.extraction.gemini_extractor import extract_with_gemini
 from app.services.extraction.preprocessor import preprocess_image
+from app.services.extraction.prompts import CURRENT_PROMPT_VERSION
 from app.services.extraction.tesseract_fallback import extract_with_tesseract_fallback
+from app.services.notifications import get_notification_service
 from app.services.rules import compute_score_and_verdict, evaluate_rules
 from app.services.storage.minio_client import get_object_bytes, put_object_bytes
-from app.services.storage.security import sanitize_storage_key
+from app.services.storage.security import sanitize_storage_key, validate_image_bytes
 from app.tasks.celery_app import celery_app
 
 logger = logging.getLogger(__name__)
 
 _task_engine = None
 _TaskSessionLocal = None
+_redis_pool = None
 
 
 def get_task_session() -> AsyncSession:
@@ -55,14 +59,23 @@ def run_async(coro: Any) -> Any:
         return asyncio.run(coro)
 
 
+def get_redis_client() -> Any:
+    """Provides a reusable Redis client using a shared connection pool."""
+    global _redis_pool
+    if _redis_pool is None:
+        import redis
+
+        _redis_pool = redis.ConnectionPool.from_url(settings.REDIS_URL)
+    import redis
+
+    return redis.Redis(connection_pool=_redis_pool)
+
+
 def publish_scan_event(scan_id: str, event_data: dict[str, Any]) -> None:
     """Publishes real-time scan event to Redis pub/sub channel for WebSocket clients."""
     try:
-        import redis
-
-        r = redis.from_url(settings.REDIS_URL)
+        r = get_redis_client()
         r.publish(f"scan:{scan_id}:events", json.dumps(event_data))
-        r.close()
     except Exception as exc:
         logger.debug("Failed to publish scan event to Redis: %s", exc)
 
@@ -106,6 +119,8 @@ async def _async_scan_pipeline(task_self: Any, scan_id: str) -> dict[str, Any]:
         for idx, orig_key in enumerate(original_keys):
             # Fetch from MinIO
             raw_bytes = get_object_bytes(orig_key)
+            # Recheck magic bytes in worker to defend against poisoned payloads in storage
+            validate_image_bytes(raw_bytes)
             # Preprocess with OpenCV
             proc_bytes, meta = preprocess_image(raw_bytes)
             # Store processed image in MinIO
@@ -119,7 +134,10 @@ async def _async_scan_pipeline(task_self: Any, scan_id: str) -> dict[str, Any]:
         t_prep_duration = round((time.perf_counter() - t_prep_start) * 1000, 2)
 
         # 4. Step B & C: Extraction with Gemini + Tesseract Fallback
-        scan.pipeline_meta["stage"] = "extracting"
+        meta = dict(scan.pipeline_meta or {})
+        meta["stage"] = "extracting"
+        scan.pipeline_meta = meta
+        flag_modified(scan, "pipeline_meta")
         await session.commit()
         publish_scan_event(
             scan_id, {"scan_id": scan_id, "status": "processing", "stage": "extracting"}
@@ -185,7 +203,7 @@ async def _async_scan_pipeline(task_self: Any, scan_id: str) -> dict[str, Any]:
         )
 
         # Status Transition: completed / needs_review
-        if fallback_used or avg_confidence < 0.6 or verdict == "needs_review":
+        if avg_confidence < 0.6 or verdict == "needs_review":
             final_status = "needs_review"
         else:
             final_status = "completed"
@@ -193,6 +211,7 @@ async def _async_scan_pipeline(task_self: Any, scan_id: str) -> dict[str, Any]:
         pipeline_meta = {
             "model": model_name,
             "provider": provider,
+            "prompt_version": CURRENT_PROMPT_VERSION,
             "avg_confidence": avg_confidence,
             "fallback_used": fallback_used,
             "compliance_score": score,
@@ -261,6 +280,22 @@ async def _async_scan_pipeline(task_self: Any, scan_id: str) -> dict[str, Any]:
         }
         publish_scan_event(scan_id, terminal_event)
 
+        # Trigger notification service if scan requires officer review
+        if final_status == "needs_review":
+            try:
+                notif_svc = get_notification_service()
+                await notif_svc.notify_scan_needs_review(
+                    scan_id=scan_id,
+                    reason=f"Scan completed with verdict '{verdict}' and confidence {avg_confidence:.2f}",
+                    metadata={"confidence": avg_confidence, "score": score, "verdict": verdict},
+                )
+            except Exception as notif_err:
+                logger.warning(
+                    "Failed to dispatch needs_review notification for scan %s: %s",
+                    scan_id,
+                    notif_err,
+                )
+
         logger.info(
             "Scan %s completed with status=%s, verdict=%s, score=%.1f, violations=%d",
             scan_id,
@@ -291,6 +326,18 @@ async def _async_mark_scan_failed(scan_id: str, error_msg: str) -> None:
                 publish_scan_event(
                     scan_id, {"scan_id": scan_id, "status": "failed", "error": error_msg}
                 )
+        # Trigger notification service on pipeline failure
+        try:
+            notif_svc = get_notification_service()
+            await notif_svc.notify_scan_failed(
+                scan_id=scan_id,
+                error_msg=error_msg,
+                metadata={"error": error_msg},
+            )
+        except Exception as notif_err:
+            logger.warning(
+                "Failed to dispatch failed notification for scan %s: %s", scan_id, notif_err
+            )
     except Exception as exc:
         logger.error("Failed to mark scan %s as failed: %s", scan_id, exc)
 
@@ -299,6 +346,10 @@ async def _async_mark_scan_failed(scan_id: str, error_msg: str) -> None:
     bind=True,
     max_retries=3,
     default_retry_delay=5,
+    acks_late=True,
+    retry_backoff=True,
+    retry_jitter=True,
+    rate_limit="30/m",
     name="scan_pipeline",
 )
 def scan_pipeline_task(self, scan_id: str) -> dict[str, Any]:

@@ -30,12 +30,14 @@ class RuleResponse(BaseModel):
     mandatory: bool
     is_enabled: bool = True
     severity_override: str | None = None
+    thresholds: dict[str, Any] | None = None
     trigger_count: int = 0
 
 
 class RuleAdminUpdateRequest(BaseModel):
     is_enabled: bool | None = None
     severity_override: Literal["critical", "major", "minor", "advisory", ""] | None = None
+    thresholds: dict[str, Any] | None = None
 
 
 class ViolationOverrideRequest(BaseModel):
@@ -59,3 +61,17 @@ class ViolationResponse(BaseModel):
 
 class ScanExtractionUpdateRequest(BaseModel):
     fields: dict[str, Any]
+
+
+class RuleRecentScanItem(BaseModel):
+    scan_id: str
+    violation_id: str
+    mode: str
+    scanned_at: str
+    verdict: str | None = None
+    observed_value: str | None = None
+    expected_value: str | None = None
+    field_name: str
+    overridden: bool = False
+    inspector_name: str | None = None
+    product_name: str | None = None

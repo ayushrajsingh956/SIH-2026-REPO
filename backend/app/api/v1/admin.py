@@ -107,6 +107,11 @@ async def create_user(
     response_model=UserResponse,
     summary="Update user role or active status (Admin only)",
 )
+@router.put(
+    "/users/{user_id}",
+    response_model=UserResponse,
+    summary="Update user role or active status (Admin only)",
+)
 async def update_user(
     user_id: uuid.UUID,
     update_in: UserUpdate,

@@ -334,6 +334,36 @@ class MRPFormatValidator(BaseValidator):
         val = mrp.value
         raw = mrp.raw or ""
 
+        # Check currency designation per Rule 9(1)
+        foreign_currencies = [r"\$", r"€", r"£", r"¥", r"\busd\b", r"\beur\b", r"\bgbp\b"]
+        if mrp.currency and mrp.currency.strip().upper() not in ("INR", "RS", "RUPEES", ""):
+            violations.append(
+                ViolationData(
+                    rule_code=rule.id,
+                    rule_title=rule.title,
+                    citation=rule.citation,
+                    severity=rule.severity,
+                    field_name="mrp",
+                    observed_value=f"Currency: {mrp.currency}",
+                    expected_value="Retail sale price must be declared in Indian Rupees (INR, Rs., or ₹)",
+                )
+            )
+            return violations
+
+        if raw and any(re.search(p, raw, re.IGNORECASE) for p in foreign_currencies):
+            violations.append(
+                ViolationData(
+                    rule_code=rule.id,
+                    rule_title=rule.title,
+                    citation=rule.citation,
+                    severity=rule.severity,
+                    field_name="mrp",
+                    observed_value=raw,
+                    expected_value="Retail sale price must be declared in Indian Rupees (INR, Rs., or ₹)",
+                )
+            )
+            return violations
+
         if val is None:
             # Check if raw text contains any number
             match = re.search(r"(\d+(?:\.\d{1,2})?)", raw)
@@ -388,6 +418,9 @@ class TaxesInclusiveTextValidator(BaseValidator):
         ]
 
         matched = any(re.search(p, combined_text, re.IGNORECASE) for p in required_patterns)
+        if not matched and context.raw_text:
+            matched = any(re.search(p, context.raw_text, re.IGNORECASE) for p in required_patterns)
+
         if not matched:
             violations.append(
                 ViolationData(
@@ -511,6 +544,49 @@ class NetQuantityPlacementValidator(BaseValidator):
         return violations
 
 
+def _is_mandatory_declaration_block(block: TextBlock, fields: ExtractionFields) -> bool:
+    text = (getattr(block, "text", "") or "").strip().lower()
+    if not text:
+        return False
+    # Must contain at least one digit
+    if not any(c.isdigit() for c in text):
+        return False
+
+    # Check pattern matching MRP or Net Qty declarations
+    if re.search(r"(?:mrp|rs\.?|₹|inr|net\s*(?:wt|weight|qty|quantity))\s*[:.]?\s*\d+", text):
+        return True
+
+    # Check against fields.net_quantity
+    nq = getattr(fields, "net_quantity", None)
+    if nq:
+        raw_nq = (getattr(nq, "raw", "") or "").strip().lower()
+        if raw_nq and (raw_nq in text or text in raw_nq):
+            return True
+        val_nq = getattr(nq, "value", None)
+        if val_nq is not None:
+            val_str = str(
+                int(val_nq) if isinstance(val_nq, float) and val_nq.is_integer() else val_nq
+            )
+            if val_str in text:
+                return True
+
+    # Check against fields.mrp
+    mrp = getattr(fields, "mrp", None)
+    if mrp:
+        raw_mrp = (getattr(mrp, "raw", "") or "").strip().lower()
+        if raw_mrp and (raw_mrp in text or text in raw_mrp):
+            return True
+        val_mrp = getattr(mrp, "value", None)
+        if val_mrp is not None:
+            val_str = str(
+                int(val_mrp) if isinstance(val_mrp, float) and val_mrp.is_integer() else val_mrp
+            )
+            if val_str in text:
+                return True
+
+    return False
+
+
 class FontSizeSurfaceAreaValidator(BaseValidator):
     def validate(
         self,
@@ -519,6 +595,9 @@ class FontSizeSurfaceAreaValidator(BaseValidator):
         context: ValidationContext,
     ) -> list[ViolationData]:
         violations: list[ViolationData] = []
+        if context.font_check_mode != "surface_area":
+            return violations
+
         surface_area = context.surface_area_cm2
         if surface_area is None or surface_area <= 0:
             # If no surface area provided, surface area check is skipped
@@ -542,9 +621,10 @@ class FontSizeSurfaceAreaValidator(BaseValidator):
                 required_min_mm = float(b["min_height_mm"])
                 break
 
-        # Check detected text blocks if mm height estimation is recorded
-        # If any block explicitly has font_height_mm < required_min_mm
+        # Check detected text blocks for mandatory declarations (net quantity / mrp numerals)
         for block in context.detected_text_blocks:
+            if not _is_mandatory_declaration_block(block, fields):
+                continue
             estimated_mm = getattr(block, "estimated_font_height_mm", None)
             if estimated_mm is not None and estimated_mm < required_min_mm:
                 violations.append(
@@ -556,6 +636,7 @@ class FontSizeSurfaceAreaValidator(BaseValidator):
                         field_name="font_size",
                         observed_value=f"{estimated_mm:.1f} mm (Surface Area: {surface_area} cm²)",
                         expected_value=f"Minimum font height of {required_min_mm:.1f} mm per Rule 9(5) Table 1",
+                        bbox={"coords": block.bbox} if getattr(block, "bbox", None) else None,
                     )
                 )
                 break
@@ -571,12 +652,17 @@ class FontSizeRelativeValidator(BaseValidator):
         context: ValidationContext,
     ) -> list[ViolationData]:
         violations: list[ViolationData] = []
+        if context.font_check_mode != "relative":
+            return violations
+
         min_px = float(rule.params.get("min_char_height_px", 10.0))
 
         if not context.detected_text_blocks:
             return violations
 
         for block in context.detected_text_blocks:
+            if not _is_mandatory_declaration_block(block, fields):
+                continue
             px = block.estimated_char_height_px
             if px is not None and 0 < px < min_px:
                 violations.append(

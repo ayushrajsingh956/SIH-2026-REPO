@@ -115,7 +115,8 @@ export interface paths {
             cookie?: never;
         };
         get?: never;
-        put?: never;
+        /** Update user role or active status (Admin only) */
+        put: operations["update_user_api_v1_admin_users__user_id__put"];
         post?: never;
         delete?: never;
         options?: never;
@@ -186,6 +187,313 @@ export interface paths {
         /** Polling endpoint for scan status and results */
         get: operations["get_scan_detail_api_v1_scans__id__get"];
         put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/scans/{id}/extraction": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Inspector/Admin updates extraction fields and re-evaluates compliance rules */
+        patch: operations["update_scan_extraction_api_v1_scans__id__extraction_patch"];
+        trace?: never;
+    };
+    "/api/v1/scans/{id}/violations/{vid}/override": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Inspector/Admin overrides a rule violation with written justification */
+        post: operations["override_scan_violation_api_v1_scans__id__violations__vid__override_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/dashboard/summary": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Dashboard KPI metrics */
+        get: operations["get_dashboard_summary_api_v1_dashboard_summary_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/dashboard/violations/by-rule": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Violations grouped by rule */
+        get: operations["get_violations_by_rule_api_v1_dashboard_violations_by_rule_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/dashboard/violations/by-severity": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Violations grouped by severity */
+        get: operations["get_violations_by_severity_api_v1_dashboard_violations_by_severity_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/dashboard/compliance/trend": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Compliance time-series trend */
+        get: operations["get_compliance_trend_api_v1_dashboard_compliance_trend_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/dashboard/districts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** District and state compliance breakdown */
+        get: operations["get_districts_compliance_api_v1_dashboard_districts_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/products": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List products with FTS / trigram search */
+        get: operations["list_products_api_v1_products_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/products/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get single product details and recurrence summary */
+        get: operations["get_product_detail_api_v1_products__id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/products/{id}/scans": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get chronological scans and recurrence breakdown */
+        get: operations["get_product_scans_api_v1_products__id__scans_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/violations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Cross-scan violation search with multi-filters */
+        get: operations["list_violations_api_v1_violations_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/violations/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get single violation detail */
+        get: operations["get_violation_detail_api_v1_violations__id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/reports": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List generated compliance reports */
+        get: operations["list_reports_api_v1_reports_get"];
+        put?: never;
+        /** Generate statutory compliance report (PDF and DOCX) */
+        post: operations["create_report_api_v1_reports_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/reports/{id}/download": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get 5-minute presigned URL for statutory report download (role-checked) */
+        get: operations["download_report_api_v1_reports__id__download_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/rules": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List all compliance rules merged with database configuration and trigger statistics */
+        get: operations["list_rules_api_v1_rules_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/rules/{code}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get single rule definition and statistics by rule code */
+        get: operations["get_rule_by_code_api_v1_rules__code__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/rules/{code}/recent-scans": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get recent scans and violations triggering this rule */
+        get: operations["get_rule_recent_scans_api_v1_rules__code__recent_scans_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/rules/{code}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Admin enables/disables rule or updates severity override */
+        put: operations["update_rule_config_api_v1_admin_rules__code__put"];
         post?: never;
         delete?: never;
         options?: never;
@@ -309,6 +617,91 @@ export interface components {
             /** Surface Area Cm2 */
             surface_area_cm2?: number | null;
         };
+        /** ComplianceTrendItem */
+        ComplianceTrendItem: {
+            /** Date */
+            date: string;
+            /** Total Scans */
+            total_scans: number;
+            /** Compliant Scans */
+            compliant_scans: number;
+            /** Non Compliant Scans */
+            non_compliant_scans: number;
+            /** Compliance Rate */
+            compliance_rate: number;
+            /** Avg Score */
+            avg_score: number;
+        };
+        /** DashboardSummaryResponse */
+        DashboardSummaryResponse: {
+            /**
+             * Total Scans
+             * @description Total scans in selected period
+             */
+            total_scans: number;
+            /**
+             * Compliant Scans
+             * @description Number of compliant scans
+             */
+            compliant_scans: number;
+            /**
+             * Non Compliant Scans
+             * @description Number of non-compliant scans
+             */
+            non_compliant_scans: number;
+            /**
+             * Needs Review Scans
+             * @description Number of scans requiring manual review
+             */
+            needs_review_scans: number;
+            /**
+             * Compliance Rate
+             * @description Percentage of compliant scans (0-100)
+             */
+            compliance_rate: number;
+            /**
+             * Avg Compliance Score
+             * @description Average compliance score across scans
+             */
+            avg_compliance_score: number;
+            /**
+             * Pending Reviews
+             * @description Scans currently awaiting officer action
+             */
+            pending_reviews: number;
+            /**
+             * Total Violations
+             * @description Total statutory violations detected
+             */
+            total_violations: number;
+            /**
+             * Critical Violations
+             * @description Critical severity violations detected
+             */
+            critical_violations: number;
+            /**
+             * Scans Comparison Pct
+             * @description Percentage change compared to previous period
+             */
+            scans_comparison_pct?: number | null;
+        };
+        /** DistrictHeatItem */
+        DistrictHeatItem: {
+            /** District */
+            district: string;
+            /** State */
+            state: string;
+            /** Total Scans */
+            total_scans: number;
+            /** Compliant Scans */
+            compliant_scans: number;
+            /** Compliance Rate */
+            compliance_rate: number;
+            /** Critical Violations */
+            critical_violations: number;
+            /** Last Activity */
+            last_activity?: string | null;
+        };
         /** HTTPValidationError */
         HTTPValidationError: {
             /** Detail */
@@ -333,10 +726,348 @@ export interface components {
                 [key: string]: unknown;
             };
         };
+        /** ProductDetailResponse */
+        ProductDetailResponse: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Name */
+            name: string;
+            /** Brand */
+            brand?: string | null;
+            /** Manufacturer Name */
+            manufacturer_name?: string | null;
+            /** Category */
+            category?: string | null;
+            /** Barcode */
+            barcode?: string | null;
+            /** Gtin */
+            gtin?: string | null;
+            /**
+             * First Scanned
+             * Format: date-time
+             */
+            first_scanned: string;
+            /**
+             * Total Scans
+             * @default 0
+             */
+            total_scans: number;
+            /**
+             * Compliance Rate
+             * @default 0
+             */
+            compliance_rate: number;
+            /**
+             * Is Repeat Offender
+             * @default false
+             */
+            is_repeat_offender: boolean;
+            /** Recurrent Violations */
+            recurrent_violations?: components["schemas"]["RecurrentViolationItem"][];
+        };
+        /** ProductListItem */
+        ProductListItem: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Name */
+            name: string;
+            /** Brand */
+            brand?: string | null;
+            /** Manufacturer Name */
+            manufacturer_name?: string | null;
+            /** Category */
+            category?: string | null;
+            /** Barcode */
+            barcode?: string | null;
+            /** Gtin */
+            gtin?: string | null;
+            /**
+             * First Scanned
+             * Format: date-time
+             */
+            first_scanned: string;
+            /** Last Scanned At */
+            last_scanned_at?: string | null;
+            /**
+             * Total Scans
+             * @default 0
+             */
+            total_scans: number;
+            /**
+             * Compliance Badge
+             * @default unscanned
+             */
+            compliance_badge: string;
+            /** Latest Score */
+            latest_score?: number | null;
+            /**
+             * Violations Count
+             * @default 0
+             */
+            violations_count: number;
+        };
+        /** ProductListResponse */
+        ProductListResponse: {
+            /** Items */
+            items: components["schemas"]["ProductListItem"][];
+            /** Total */
+            total: number;
+            /** Page */
+            page: number;
+            /** Limit */
+            limit: number;
+        };
+        /** ProductScanItem */
+        ProductScanItem: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Mode */
+            mode: string;
+            /** Status */
+            status: string;
+            /** Verdict */
+            verdict?: string | null;
+            /** Compliance Score */
+            compliance_score?: number | null;
+            /**
+             * Scanned At
+             * Format: date-time
+             */
+            scanned_at: string;
+            /** Inspector Name */
+            inspector_name?: string | null;
+            /** Violations */
+            violations?: components["schemas"]["ProductScanViolationSummary"][];
+        };
+        /** ProductScanViolationSummary */
+        ProductScanViolationSummary: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Rule Code */
+            rule_code: string;
+            /** Rule Title */
+            rule_title: string;
+            /** Citation */
+            citation: string;
+            /** Severity */
+            severity: string;
+            /** Field Name */
+            field_name: string;
+            /**
+             * Overridden
+             * @default false
+             */
+            overridden: boolean;
+        };
+        /** ProductScansResponse */
+        ProductScansResponse: {
+            product: components["schemas"]["ProductDetailResponse"];
+            /** Scans */
+            scans: components["schemas"]["ProductScanItem"][];
+            /** Is Repeat Offender */
+            is_repeat_offender: boolean;
+            /** Recurrent Violations */
+            recurrent_violations: components["schemas"]["RecurrentViolationItem"][];
+        };
+        /** RecurrentViolationItem */
+        RecurrentViolationItem: {
+            /** Rule Code */
+            rule_code: string;
+            /** Rule Title */
+            rule_title: string;
+            /** Citation */
+            citation: string;
+            /** Severity */
+            severity: string;
+            /** Count */
+            count: number;
+            /** Scan Ids */
+            scan_ids: string[];
+        };
         /** RefreshTokenRequest */
         RefreshTokenRequest: {
             /** Refresh Token */
             refresh_token: string;
+        };
+        /** ReportDownloadResponse */
+        ReportDownloadResponse: {
+            /**
+             * Report Id
+             * Format: uuid
+             */
+            report_id: string;
+            /**
+             * Scan Id
+             * Format: uuid
+             */
+            scan_id: string;
+            /**
+             * Format
+             * @description File format: pdf or docx
+             */
+            format: string;
+            /**
+             * Download Url
+             * @description 5-minute presigned download URL
+             */
+            download_url: string;
+            /**
+             * Expires In
+             * @description Expiration in seconds (300 seconds / 5 minutes)
+             * @default 300
+             */
+            expires_in: number;
+            /**
+             * Filename
+             * @description Recommended statutory file name
+             */
+            filename: string;
+        };
+        /** ReportGenerateRequest */
+        ReportGenerateRequest: {
+            /**
+             * Scan Id
+             * Format: uuid
+             */
+            scan_id: string;
+        };
+        /** ReportListItem */
+        ReportListItem: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Scan Id
+             * Format: uuid
+             */
+            scan_id: string;
+            /** Pdf Url */
+            pdf_url?: string | null;
+            /** Docx Url */
+            docx_url?: string | null;
+            /**
+             * Generated By
+             * Format: uuid
+             */
+            generated_by: string;
+            /** Generator Name */
+            generator_name?: string | null;
+            /**
+             * Generated At
+             * Format: date-time
+             */
+            generated_at: string;
+            /** Product Name */
+            product_name?: string | null;
+            /** Scan Verdict */
+            scan_verdict?: string | null;
+            /** Scan Score */
+            scan_score?: number | null;
+        };
+        /** ReportListResponse */
+        ReportListResponse: {
+            /** Items */
+            items: components["schemas"]["ReportListItem"][];
+            /** Total */
+            total: number;
+            /** Page */
+            page: number;
+            /** Limit */
+            limit: number;
+        };
+        /** RuleAdminUpdateRequest */
+        RuleAdminUpdateRequest: {
+            /** Is Enabled */
+            is_enabled?: boolean | null;
+            /** Severity Override */
+            severity_override?: ("critical" | "major" | "minor" | "advisory" | "") | null;
+            /** Thresholds */
+            thresholds?: {
+                [key: string]: unknown;
+            } | null;
+        };
+        /** RuleRecentScanItem */
+        RuleRecentScanItem: {
+            /** Scan Id */
+            scan_id: string;
+            /** Violation Id */
+            violation_id: string;
+            /** Mode */
+            mode: string;
+            /** Scanned At */
+            scanned_at: string;
+            /** Verdict */
+            verdict?: string | null;
+            /** Observed Value */
+            observed_value?: string | null;
+            /** Expected Value */
+            expected_value?: string | null;
+            /** Field Name */
+            field_name: string;
+            /**
+             * Overridden
+             * @default false
+             */
+            overridden: boolean;
+            /** Inspector Name */
+            inspector_name?: string | null;
+            /** Product Name */
+            product_name?: string | null;
+        };
+        /** RuleResponse */
+        RuleResponse: {
+            /** Id */
+            id: string;
+            /** Title */
+            title: string;
+            /** Citation */
+            citation: string;
+            /** Severity */
+            severity: string;
+            /** Effective Severity */
+            effective_severity: string;
+            /** Applies To */
+            applies_to: string[];
+            /** Check */
+            check: string;
+            /** Params */
+            params: {
+                [key: string]: unknown;
+            };
+            /** Description Plain */
+            description_plain: string;
+            /** Mandatory */
+            mandatory: boolean;
+            /**
+             * Is Enabled
+             * @default true
+             */
+            is_enabled: boolean;
+            /** Severity Override */
+            severity_override?: string | null;
+            /** Thresholds */
+            thresholds?: {
+                [key: string]: unknown;
+            } | null;
+            /**
+             * Trigger Count
+             * @default 0
+             */
+            trigger_count: number;
         };
         /** ScanCreateResponse */
         ScanCreateResponse: {
@@ -401,6 +1132,17 @@ export interface components {
             extraction?: {
                 [key: string]: unknown;
             } | null;
+            /** Violations */
+            violations?: {
+                [key: string]: unknown;
+            }[];
+        };
+        /** ScanExtractionUpdateRequest */
+        ScanExtractionUpdateRequest: {
+            /** Fields */
+            fields: {
+                [key: string]: unknown;
+            };
         };
         /** ScanListResponse */
         ScanListResponse: {
@@ -527,6 +1269,134 @@ export interface components {
             input?: unknown;
             /** Context */
             ctx?: Record<string, never>;
+        };
+        /** ViolationListItem */
+        ViolationListItem: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Scan Id
+             * Format: uuid
+             */
+            scan_id: string;
+            /** Rule Code */
+            rule_code: string;
+            /** Rule Title */
+            rule_title: string;
+            /** Citation */
+            citation: string;
+            /** Severity */
+            severity: string;
+            /** Field Name */
+            field_name: string;
+            /** Observed Value */
+            observed_value?: string | null;
+            /** Expected Value */
+            expected_value?: string | null;
+            /** Bbox */
+            bbox?: {
+                [key: string]: unknown;
+            } | null;
+            /**
+             * Overridden
+             * @default false
+             */
+            overridden: boolean;
+            /** Override Reason */
+            override_reason?: string | null;
+            /**
+             * Scanned At
+             * Format: date-time
+             */
+            scanned_at: string;
+            /** Mode */
+            mode: string;
+            /** District */
+            district?: string | null;
+            /** State */
+            state?: string | null;
+            /** Product Name */
+            product_name?: string | null;
+        };
+        /** ViolationListResponse */
+        ViolationListResponse: {
+            /** Items */
+            items: components["schemas"]["ViolationListItem"][];
+            /** Total */
+            total: number;
+            /** Page */
+            page: number;
+            /** Limit */
+            limit: number;
+            /** Severity Summary */
+            severity_summary?: {
+                [key: string]: number;
+            };
+        };
+        /** ViolationOverrideRequest */
+        ViolationOverrideRequest: {
+            /**
+             * Reason
+             * @description Inspector justification for override
+             */
+            reason: string;
+        };
+        /** ViolationResponse */
+        ViolationResponse: {
+            /** Id */
+            id: string;
+            /** Scan Id */
+            scan_id: string;
+            /** Rule Code */
+            rule_code: string;
+            /** Rule Title */
+            rule_title: string;
+            /** Citation */
+            citation: string;
+            /** Severity */
+            severity: string;
+            /** Field Name */
+            field_name: string;
+            /** Observed Value */
+            observed_value?: string | null;
+            /** Expected Value */
+            expected_value?: string | null;
+            /** Bbox */
+            bbox?: {
+                [key: string]: unknown;
+            } | null;
+            /**
+             * Overridden
+             * @default false
+             */
+            overridden: boolean;
+            /** Override Reason */
+            override_reason?: string | null;
+        };
+        /** ViolationsByRuleItem */
+        ViolationsByRuleItem: {
+            /** Rule Code */
+            rule_code: string;
+            /** Rule Title */
+            rule_title: string;
+            /** Citation */
+            citation: string;
+            /** Severity */
+            severity: string;
+            /** Count */
+            count: number;
+        };
+        /** ViolationsBySeverityItem */
+        ViolationsBySeverityItem: {
+            /** Severity */
+            severity: string;
+            /** Count */
+            count: number;
+            /** Percentage */
+            percentage: number;
         };
     };
     responses: never;
@@ -759,6 +1629,41 @@ export interface operations {
             };
         };
     };
+    update_user_api_v1_admin_users__user_id__put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                user_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UserUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UserResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     update_user_api_v1_admin_users__user_id__patch: {
         parameters: {
             query?: never;
@@ -833,6 +1738,9 @@ export interface operations {
             query?: {
                 limit?: number;
                 offset?: number;
+                status?: string | null;
+                verdict?: string | null;
+                mode?: string | null;
             };
             header?: never;
             path?: never;
@@ -944,6 +1852,623 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ScanDetailResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_scan_extraction_api_v1_scans__id__extraction_patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ScanExtractionUpdateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ScanDetailResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    override_scan_violation_api_v1_scans__id__violations__vid__override_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+                vid: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ViolationOverrideRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ViolationResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_dashboard_summary_api_v1_dashboard_summary_get: {
+        parameters: {
+            query?: {
+                range?: "7d" | "30d" | "90d" | "365d";
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DashboardSummaryResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_violations_by_rule_api_v1_dashboard_violations_by_rule_get: {
+        parameters: {
+            query?: {
+                range?: "7d" | "30d" | "90d" | "365d";
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ViolationsByRuleItem"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_violations_by_severity_api_v1_dashboard_violations_by_severity_get: {
+        parameters: {
+            query?: {
+                range?: "7d" | "30d" | "90d" | "365d";
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ViolationsBySeverityItem"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_compliance_trend_api_v1_dashboard_compliance_trend_get: {
+        parameters: {
+            query?: {
+                range?: "7d" | "30d" | "90d" | "365d";
+                granularity?: "day" | "week" | "month";
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ComplianceTrendItem"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_districts_compliance_api_v1_dashboard_districts_get: {
+        parameters: {
+            query?: {
+                range?: "7d" | "30d" | "90d" | "365d";
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DistrictHeatItem"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_products_api_v1_products_get: {
+        parameters: {
+            query?: {
+                /** @description Search query by name, brand, manufacturer, or barcode */
+                q?: string | null;
+                page?: number;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProductListResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_product_detail_api_v1_products__id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProductDetailResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_product_scans_api_v1_products__id__scans_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProductScansResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_violations_api_v1_violations_get: {
+        parameters: {
+            query?: {
+                /** @description Filter by LMPC rule code */
+                rule_code?: string | null;
+                /** @description Filter by severity: critical, major, minor, advisory */
+                severity?: string | null;
+                /** @description Filter by inspector district */
+                district?: string | null;
+                /** @description Filter by earliest scan date */
+                start_date?: string | null;
+                /** @description Filter by latest scan date */
+                end_date?: string | null;
+                /** @description Filter by override status */
+                overridden?: boolean | null;
+                page?: number;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ViolationListResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_violation_detail_api_v1_violations__id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ViolationListItem"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_reports_api_v1_reports_get: {
+        parameters: {
+            query?: {
+                page?: number;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReportListResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_report_api_v1_reports_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReportGenerateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReportListItem"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    download_report_api_v1_reports__id__download_get: {
+        parameters: {
+            query: {
+                /** @description Report format: pdf or docx */
+                format: string;
+            };
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReportDownloadResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_rules_api_v1_rules_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RuleResponse"][];
+                };
+            };
+        };
+    };
+    get_rule_by_code_api_v1_rules__code__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                code: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RuleResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_rule_recent_scans_api_v1_rules__code__recent_scans_get: {
+        parameters: {
+            query?: {
+                limit?: number;
+            };
+            header?: never;
+            path: {
+                code: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RuleRecentScanItem"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_rule_config_api_v1_admin_rules__code__put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                code: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RuleAdminUpdateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RuleResponse"];
                 };
             };
             /** @description Validation Error */

@@ -1,6 +1,6 @@
 from datetime import UTC, datetime, timedelta
 
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, Request, status
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -9,6 +9,7 @@ from app.core.config import settings
 from app.core.database import get_db
 from app.core.deps import get_current_user, get_optional_current_user
 from app.core.exceptions import ProblemDetailException
+from app.core.limiter import limiter
 from app.core.security import (
     create_access_token,
     generate_refresh_token,
@@ -35,7 +36,9 @@ router = APIRouter(prefix="/auth", tags=["Authentication"])
     status_code=status.HTTP_201_CREATED,
     summary="Register a user account",
 )
+@limiter.limit("10/minute")
 async def register(
+    request: Request,
     user_in: UserRegister,
     db: AsyncSession = Depends(get_db),
     current_user: User | None = Depends(get_optional_current_user),
@@ -96,7 +99,9 @@ async def register(
     response_model=TokenResponse,
     summary="Authenticate with email & password",
 )
+@limiter.limit("5/minute")
 async def login(
+    request: Request,
     credentials: UserLogin,
     db: AsyncSession = Depends(get_db),
 ) -> TokenResponse:
@@ -154,7 +159,9 @@ async def login(
     response_model=TokenResponse,
     summary="Rotate refresh token and issue new access token",
 )
+@limiter.limit("10/minute")
 async def refresh_token(
+    request: Request,
     payload: RefreshTokenRequest,
     db: AsyncSession = Depends(get_db),
 ) -> TokenResponse:

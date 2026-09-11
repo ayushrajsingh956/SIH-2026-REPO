@@ -48,6 +48,9 @@ def extract_with_tesseract_fallback(
         try:
             raw_text = pytesseract.image_to_string(pil_img)
             full_raw_lines.extend(raw_text.splitlines())
+        except (pytesseract.TesseractNotFoundError, FileNotFoundError) as exc:
+            logger.warning("Tesseract binary not installed or found on system: %s", exc)
+            break
         except Exception as exc:
             logger.warning("pytesseract image_to_string failed: %s", exc)
             raw_text = ""
@@ -81,8 +84,21 @@ def extract_with_tesseract_fallback(
                             estimated_char_height_px=h,
                         )
                     )
+        except (pytesseract.TesseractNotFoundError, FileNotFoundError) as exc:
+            logger.warning("Tesseract binary not installed or found on system: %s", exc)
+            break
         except Exception as exc:
             logger.debug("pytesseract image_to_data failed: %s", exc)
+
+    if not full_raw_lines and not aggregated_text_blocks:
+        result = ExtractionResultSchema(
+            fields=ExtractionFields(),
+            detected_text_blocks=[],
+            page_count=len(images_bytes),
+            language_hints=[],
+            raw_text="No text extracted (OCR fallback unavailable or empty)",
+        )
+        return result, 0.0
 
     combined_text = "\n".join(full_raw_lines)
     fields = ExtractionFields()

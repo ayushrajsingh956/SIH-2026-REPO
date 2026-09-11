@@ -3,22 +3,27 @@ import time
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, Response, status
+from fastapi import FastAPI, Request, Response, status
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from redis.asyncio import from_url as redis_from_url
+from slowapi.errors import RateLimitExceeded
 from sqlalchemy import text
 
 from app.api.v1.router import api_router
 from app.core.config import settings
 from app.core.database import AsyncSessionLocal
 from app.core.exceptions import register_exception_handlers
+from app.core.limiter import limiter
 from app.schemas.health import HealthResponse
+from app.services.rules import load_rules
 from app.services.storage.minio_client import check_minio_health
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
-    # Lifespan startup hooks can go here
+    # Lifespan startup hooks: validate and load rules fail-fast
+    load_rules()
     yield
     # Lifespan shutdown hooks can go here
 
@@ -36,6 +41,23 @@ def create_app() -> FastAPI:
 
     # Register RFC7807 problem details handlers
     register_exception_handlers(app)
+
+    # Rate limiter
+    app.state.limiter = limiter
+
+    @app.exception_handler(RateLimitExceeded)
+    async def rate_limit_handler(request: Request, exc: RateLimitExceeded) -> JSONResponse:
+        return JSONResponse(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            content={
+                "type": "https://errors.legalmetro.gov.in/rate-limit-exceeded",
+                "title": "Too Many Requests",
+                "status": 429,
+                "detail": f"Rate limit exceeded: {exc.detail}",
+                "instance": str(request.url.path),
+            },
+            headers={"Retry-After": "60"},
+        )
 
     # CORS Middleware
     app.add_middleware(

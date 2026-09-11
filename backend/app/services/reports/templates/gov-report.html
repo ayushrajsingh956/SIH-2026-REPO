@@ -1,0 +1,631 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Statutory Inspection Report - {{ scan.id }}</title>
+  <style>
+    @page {
+      size: A4 portrait;
+      margin: 18mm 14mm 18mm 14mm;
+      @top-left {
+        content: "LEGALMETRO SHIELD | STATUTORY ENFORCEMENT RECORD";
+        font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+        font-size: 7.5pt;
+        font-weight: 600;
+        color: #64748b;
+        letter-spacing: 0.5px;
+      }
+      @top-right {
+        content: "PS ID 26034";
+        font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+        font-size: 7.5pt;
+        font-weight: 700;
+        color: #94a3b8;
+      }
+      @bottom-left {
+        content: "Ministry of Consumer Affairs, Food & Public Distribution • For Official Enforcement Use Only";
+        font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+        font-size: 7.5pt;
+        color: #64748b;
+      }
+      @bottom-right {
+        content: "Page " counter(page) " of " counter(pages);
+        font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+        font-size: 8pt;
+        font-weight: 600;
+        color: #334155;
+      }
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+      font-size: 9pt;
+      line-height: 1.45;
+      color: #0f172a;
+      background: #ffffff;
+    }
+
+    /* Gov Header */
+    .gov-header {
+      text-align: center;
+      padding-bottom: 12px;
+      border-bottom: 2.5px solid #0f172a;
+      margin-bottom: 14px;
+    }
+
+    .emblem-title {
+      font-size: 11pt;
+      font-weight: 800;
+      letter-spacing: 1.5px;
+      color: #0f172a;
+      text-transform: uppercase;
+      margin-bottom: 2px;
+    }
+
+    .emblem-subtitle {
+      font-size: 8.5pt;
+      font-weight: 600;
+      color: #334155;
+      letter-spacing: 0.6px;
+      text-transform: uppercase;
+    }
+
+    .emblem-division {
+      font-size: 8pt;
+      font-weight: 600;
+      color: #1e3a8a;
+      letter-spacing: 0.4px;
+      margin-top: 1px;
+    }
+
+    .report-title-banner {
+      background: #f8fafc;
+      border: 1px solid #cbd5e1;
+      border-left: 4px solid #1e3a8a;
+      padding: 7px 12px;
+      margin-top: 10px;
+    }
+
+    .report-title {
+      font-size: 10.5pt;
+      font-weight: 800;
+      color: #0f172a;
+      letter-spacing: 0.3px;
+    }
+
+    .report-statute {
+      font-size: 7.5pt;
+      color: #475569;
+      font-style: italic;
+      margin-top: 1px;
+    }
+
+    /* Metadata & Summary Block */
+    .meta-grid {
+      width: 100%;
+      margin-top: 12px;
+      margin-bottom: 14px;
+      border-collapse: collapse;
+    }
+
+    .meta-grid td {
+      padding: 4px 8px;
+      font-size: 8pt;
+      vertical-align: top;
+      border: 1px solid #e2e8f0;
+    }
+
+    .meta-label {
+      font-weight: 700;
+      color: #475569;
+      background: #f8fafc;
+      width: 18%;
+    }
+
+    .meta-val {
+      color: #0f172a;
+      font-weight: 500;
+      width: 32%;
+    }
+
+    .font-mono {
+      font-family: 'SFMono-Regular', Menlo, Monaco, Consolas, monospace;
+    }
+
+    /* Verdict & Score Callout */
+    .verdict-box {
+      margin-bottom: 14px;
+      border-radius: 4px;
+      padding: 10px 14px;
+      page-break-inside: avoid;
+    }
+
+    .verdict-compliant {
+      background: #f0fdf4;
+      border: 2px solid #16a34a;
+    }
+
+    .verdict-non_compliant {
+      background: #fef2f2;
+      border: 2px solid #dc2626;
+    }
+
+    .verdict-needs_review {
+      background: #fffbeb;
+      border: 2px solid #d97706;
+    }
+
+    .verdict-table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+
+    .verdict-table td {
+      vertical-align: middle;
+    }
+
+    .verdict-stamp {
+      display: inline-block;
+      padding: 6px 14px;
+      font-size: 10pt;
+      font-weight: 900;
+      letter-spacing: 1.5px;
+      text-transform: uppercase;
+      border-radius: 3px;
+    }
+
+    .stamp-compliant {
+      color: #15803d;
+      border: 2px solid #15803d;
+      background: #dcfce7;
+    }
+
+    .stamp-non_compliant {
+      color: #b91c1c;
+      border: 2px solid #b91c1c;
+      background: #fee2e2;
+    }
+
+    .stamp-needs_review {
+      color: #b45309;
+      border: 2px solid #b45309;
+      background: #fef3c7;
+    }
+
+    .score-badge {
+      text-align: right;
+    }
+
+    .score-title {
+      font-size: 7.5pt;
+      font-weight: 700;
+      color: #64748b;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .score-value {
+      font-size: 18pt;
+      font-weight: 900;
+      color: #0f172a;
+      font-family: 'SFMono-Regular', Menlo, Monaco, Consolas, monospace;
+    }
+
+    /* Section Headings */
+    .section-head {
+      font-size: 9pt;
+      font-weight: 800;
+      color: #0f172a;
+      text-transform: uppercase;
+      letter-spacing: 0.6px;
+      padding-bottom: 3px;
+      border-bottom: 1.5px solid #0f172a;
+      margin-top: 14px;
+      margin-bottom: 8px;
+      page-break-after: avoid;
+    }
+
+    /* Tables */
+    table.data-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-bottom: 12px;
+      font-size: 8pt;
+      page-break-inside: auto;
+    }
+
+    table.data-table tr {
+      page-break-inside: avoid;
+      page-break-after: auto;
+    }
+
+    table.data-table th {
+      background: #0f172a;
+      color: #ffffff;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.4px;
+      font-size: 7.5pt;
+      padding: 5px 8px;
+      border: 1px solid #0f172a;
+      text-align: left;
+    }
+
+    table.data-table td {
+      padding: 5px 8px;
+      border: 1px solid #cbd5e1;
+      vertical-align: top;
+    }
+
+    table.data-table tbody tr:nth-child(even) {
+      background: #f8fafc;
+    }
+
+    /* Badges */
+    .badge-sev {
+      display: inline-block;
+      font-size: 6.8pt;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: 0.4px;
+      padding: 2px 6px;
+      border-radius: 2px;
+    }
+
+    .badge-critical {
+      background: #fee2e2;
+      color: #991b1b;
+      border: 1px solid #f87171;
+    }
+
+    .badge-major {
+      background: #ffedd5;
+      color: #9a3412;
+      border: 1px solid #fb923c;
+    }
+
+    .badge-minor {
+      background: #fef9c3;
+      color: #854d0e;
+      border: 1px solid #facc15;
+    }
+
+    .badge-advisory {
+      background: #e0f2fe;
+      color: #075985;
+      border: 1px solid #7dd3fc;
+    }
+
+    /* Image Evidence Layout */
+    .evidence-container {
+      margin-top: 10px;
+      margin-bottom: 14px;
+      page-break-inside: avoid;
+    }
+
+    .evidence-grid {
+      display: table;
+      width: 100%;
+      table-layout: fixed;
+    }
+
+    .evidence-cell {
+      display: table-cell;
+      vertical-align: top;
+      padding-right: 8px;
+      width: 50%;
+    }
+
+    .evidence-cell:last-child {
+      padding-right: 0;
+      padding-left: 8px;
+    }
+
+    .photo-card {
+      border: 1px solid #cbd5e1;
+      border-radius: 3px;
+      background: #f8fafc;
+      padding: 6px;
+      text-align: center;
+    }
+
+    .photo-card img {
+      max-width: 100%;
+      max-height: 180px;
+      object-fit: contain;
+      display: block;
+      margin: 0 auto;
+      border: 1px solid #e2e8f0;
+    }
+
+    .photo-caption {
+      font-size: 7pt;
+      font-weight: 700;
+      color: #475569;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-top: 5px;
+    }
+
+    /* Attestation & Signature */
+    .officer-block {
+      margin-top: 20px;
+      page-break-inside: avoid;
+      border-top: 1.5px solid #0f172a;
+      padding-top: 10px;
+    }
+
+    .signature-grid {
+      width: 100%;
+      border-collapse: collapse;
+    }
+
+    .signature-grid td {
+      vertical-align: top;
+      width: 50%;
+    }
+
+    .attestation-text {
+      font-size: 7.5pt;
+      color: #475569;
+      line-height: 1.4;
+      padding-right: 20px;
+    }
+
+    .sign-box {
+      border: 1px dashed #94a3b8;
+      background: #fafafa;
+      padding: 10px;
+      text-align: center;
+      min-height: 70px;
+      position: relative;
+    }
+
+    .sign-line {
+      margin-top: 26px;
+      border-top: 1px solid #475569;
+      font-size: 7.5pt;
+      font-weight: 700;
+      color: #0f172a;
+      padding-top: 3px;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- National Statutory Header -->
+  <div class="gov-header">
+    <div class="emblem-title">Government of India</div>
+    <div class="emblem-subtitle">Ministry of Consumer Affairs, Food &amp; Public Distribution</div>
+    <div class="emblem-division">Department of Consumer Affairs &bull; Legal Metrology Enforcement Division</div>
+    
+    <div class="report-title-banner">
+      <table style="width: 100%; border-collapse: collapse;">
+        <tr>
+          <td style="vertical-align: middle; text-align: left;">
+            <div class="report-title">STATUTORY COMPLIANCE INSPECTION REPORT</div>
+            <div class="report-statute">Conducted pursuant to Section 15 of Legal Metrology Act, 2009 &amp; Rules 6, 9, 10, 11 of LMPC Rules, 2011</div>
+          </td>
+          <td style="vertical-align: middle; text-align: right; width: 140px;">
+            <span class="font-mono" style="font-size: 8pt; font-weight: 700; color: #1e3a8a;">REF: LM-{{ scan.id.hex[:8].upper() }}</span>
+          </td>
+        </tr>
+      </table>
+    </div>
+  </div>
+
+  <!-- Scan & Commodity Metadata -->
+  <table class="meta-grid">
+    <tr>
+      <td class="meta-label">Commodity / Product</td>
+      <td class="meta-val" style="font-weight: 700;">{{ product.name if product else "Packaged Commodity Label" }}</td>
+      <td class="meta-label">Inspection Date</td>
+      <td class="meta-val">{{ scan.scanned_at.strftime('%d %B %Y, %H:%M UTC') }}</td>
+    </tr>
+    <tr>
+      <td class="meta-label">Brand / Manufacturer</td>
+      <td class="meta-val">{{ product.brand if product and product.brand else "Declared on Packaging" }}</td>
+      <td class="meta-label">Inspection Mode</td>
+      <td class="meta-val" style="text-transform: capitalize;">{{ scan.mode }} Package</td>
+    </tr>
+    <tr>
+      <td class="meta-label">Scan UUID</td>
+      <td class="meta-val font-mono" style="font-size: 7.2pt;">{{ scan.id }}</td>
+      <td class="meta-label">Font Check Mode</td>
+      <td class="meta-val" style="text-transform: capitalize;">
+        {{ scan.font_check_mode.replace('_', ' ') }}
+        {% if scan.surface_area_cm2 %} ({{ scan.surface_area_cm2 }} cm²){% endif %}
+      </td>
+    </tr>
+    <tr>
+      <td class="meta-label">Inspecting Officer</td>
+      <td class="meta-val">
+        <strong>{{ inspector.name if inspector else "Authorized Officer" }}</strong>
+        {% if inspector and inspector.email %} ({{ inspector.email }}){% endif %}
+      </td>
+      <td class="meta-label">Jurisdiction / District</td>
+      <td class="meta-val">{{ inspector.district if inspector and inspector.district else "National Enforcement Cell" }}, {{ inspector.state if inspector and inspector.state else "India" }}</td>
+    </tr>
+  </table>
+
+  <!-- Compliance Verdict Callout -->
+  <div class="verdict-box verdict-{{ scan.verdict or 'needs_review' }}">
+    <table class="verdict-table">
+      <tr>
+        <td>
+          <div style="font-size: 7.5pt; font-weight: 700; color: #475569; text-transform: uppercase; margin-bottom: 4px;">
+            Statutory Legal Metrology Verdict
+          </div>
+          <div class="verdict-stamp stamp-{{ scan.verdict or 'needs_review' }}">
+            {% if scan.verdict == 'compliant' %}
+              ✓ STATUTORY COMPLIANT
+            {% elif scan.verdict == 'non_compliant' %}
+              ✕ NON-COMPLIANT (VIOLATIONS RECORDED)
+            {% else %}
+              ⚠ SCRUTINY REQUIRED / NEEDS REVIEW
+            {% endif %}
+          </div>
+        </td>
+        <td class="score-badge">
+          <div class="score-title">Weighted Compliance Score</div>
+          <div class="score-value">
+            {{ "%.1f"|format(scan.compliance_score) if scan.compliance_score is not none else "N/A" }}<span style="font-size: 11pt; color: #64748b;">/100</span>
+          </div>
+        </td>
+      </tr>
+    </table>
+  </div>
+
+  <!-- Photographic Evidence -->
+  {% if product_photo_b64 or annotated_photo_b64 %}
+  <div class="evidence-container">
+    <div class="section-head">Photographic Evidence &amp; Visual Inspection</div>
+    <div class="evidence-grid">
+      {% if product_photo_b64 %}
+      <div class="evidence-cell">
+        <div class="photo-card">
+          <img src="data:image/jpeg;base64,{{ product_photo_b64 }}" alt="Packaging Commodity Image">
+          <div class="photo-caption">Exhibit A: Packaged Commodity Surface As Inspected</div>
+        </div>
+      </div>
+      {% endif %}
+      {% if annotated_photo_b64 %}
+      <div class="evidence-cell">
+        <div class="photo-card">
+          <img src="data:image/png;base64,{{ annotated_photo_b64 }}" alt="Annotated Declarations">
+          <div class="photo-caption">Exhibit B: Computer Vision Label Segmentation &amp; BBox Extraction</div>
+        </div>
+      </div>
+      {% endif %}
+    </div>
+  </div>
+  {% endif %}
+
+  <!-- Statutory Violations Table -->
+  <div class="section-head">Statutory Violations &amp; Deficiencies Statement</div>
+  {% if violations and violations|length > 0 %}
+  <table class="data-table">
+    <thead>
+      <tr>
+        <th style="width: 14%;">Rule Code</th>
+        <th style="width: 22%;">Statutory Citation</th>
+        <th style="width: 11%;">Severity</th>
+        <th style="width: 26%;">Observed on Package</th>
+        <th style="width: 27%;">Statutory Requirement</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for v in violations %}
+      <tr>
+        <td class="font-mono" style="font-weight: 700; color: #0f172a;">{{ v.rule_code }}</td>
+        <td>
+          <div style="font-weight: 700; color: #1e3a8a;">{{ v.citation }}</div>
+          <div style="font-size: 7pt; color: #475569;">{{ v.rule_title }}</div>
+        </td>
+        <td>
+          <span class="badge-sev badge-{{ v.severity }}">{{ v.severity }}</span>
+          {% if v.overridden %}
+          <div style="font-size: 6.5pt; color: #b45309; font-weight: 700; margin-top: 2px;">OVERRIDDEN</div>
+          {% endif %}
+        </td>
+        <td style="color: #991b1b; font-weight: 600;">
+          {{ v.observed_value or "Declaration missing on label" }}
+        </td>
+        <td style="color: #15803d; font-weight: 500;">
+          {{ v.expected_value or "Mandatory statutory compliance" }}
+          {% if v.overridden and v.override_reason %}
+          <div style="font-size: 6.8pt; color: #64748b; margin-top: 3px; font-style: italic;">
+            Override Note: {{ v.override_reason }}
+          </div>
+          {% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <div style="padding: 10px; background: #f0fdf4; border: 1px solid #86efac; border-radius: 3px; margin-bottom: 12px; font-size: 8pt; color: #166534;">
+    <strong>No Statutory Violations Detected.</strong> All mandatory declarations required under Rule 6(1), Rule 9, Rule 10, and Rule 11 of the Legal Metrology (Packaged Commodities) Rules, 2011 were observed in conformity.
+  </div>
+  {% endif %}
+
+  <!-- Extracted Mandatory Declarations Table -->
+  <div class="section-head">Mandatory Declarations Audit (Rule 6(1) Verification)</div>
+  <table class="data-table">
+    <thead>
+      <tr>
+        <th style="width: 25%;">Statutory Field</th>
+        <th style="width: 50%;">Declared Value Extracted</th>
+        <th style="width: 13%; text-align: center;">AI Confidence</th>
+        <th style="width: 12%; text-align: center;">Conformity</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for field_key, field_data in field_rows %}
+      <tr>
+        <td style="font-weight: 700; text-transform: capitalize;">
+          {{ field_key.replace('_', ' ') }}
+        </td>
+        <td>
+          {% if field_data is mapping %}
+            {% if field_data.raw %}
+              {{ field_data.raw }}
+            {% elif field_data.normalized %}
+              {{ field_data.normalized }}
+            {% else %}
+              {{ field_data }}
+            {% endif %}
+          {% else %}
+            {{ field_data if field_data is not none else "Not Detected" }}
+          {% endif %}
+        </td>
+        <td style="text-align: center;" class="font-mono">
+          {% if field_data is mapping and field_data.confidence is defined and field_data.confidence is not none %}
+            {{ "%.0f"|format(field_data.confidence * 100) }}%
+          {% else %}
+            —
+          {% endif %}
+        </td>
+        <td style="text-align: center;">
+          {% if field_key in violating_fields %}
+            <span style="color: #b91c1c; font-weight: 800; font-size: 7pt;">DEFICIENT</span>
+          {% else %}
+            <span style="color: #15803d; font-weight: 800; font-size: 7pt;">PASS</span>
+          {% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+
+  <!-- Officer Verification & Statutory Attestation -->
+  <div class="officer-block">
+    <table class="signature-grid">
+      <tr>
+        <td>
+          <div class="attestation-text">
+            <strong>OFFICIAL STATUTORY ATTESTATION:</strong><br>
+            I hereby certify that this compliance verification report has been generated through the LegalMetro Shield automated compliance assessment system under the authority vested under Section 15 of the Legal Metrology Act, 2009. The findings recorded herein reflect the statutory evaluation of the packaged commodity label submitted for inspection.
+          </div>
+        </td>
+        <td>
+          <div class="sign-box">
+            <div style="font-size: 7.2pt; color: #64748b; margin-bottom: 2px;">DIGITALLY VERIFIED INSPECTION REPORT</div>
+            <div style="font-size: 8pt; font-weight: 700; color: #0f172a;">{{ inspector.name if inspector else "Authorized Legal Metrology Inspector" }}</div>
+            <div class="sign-line">
+              Official Signature / Seal &bull; {{ scan.scanned_at.strftime('%d-%m-%Y') }}
+            </div>
+          </div>
+        </td>
+      </tr>
+    </table>
+  </div>
+
+</body>
+</html>

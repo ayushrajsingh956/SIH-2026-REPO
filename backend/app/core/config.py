@@ -54,6 +54,9 @@ class Settings(BaseSettings):
         "http://localhost:3000",
     ]
 
+    # Rate Limiting
+    RATE_LIMITING_ENABLED: bool = True
+
 
 @lru_cache
 def get_settings() -> Settings:

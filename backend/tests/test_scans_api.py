@@ -231,6 +231,33 @@ class TestScanEventsWebSocket:
 
         from app.main import app
 
+        user, token = await create_test_user("inspector")
+        scan_id = uuid.uuid4()
+        async with AsyncSessionLocal() as session:
+            scan = Scan(
+                id=scan_id,
+                scanned_by=user.id,
+                mode="retail",
+                image_urls=["scans/mock/image.png"],
+                status="completed",
+                pipeline_meta={"model": "gemini-2.5-flash"},
+            )
+            session.add(scan)
+            await session.commit()
+
+        client = TestClient(app)
+        with client.websocket_connect(f"/api/v1/scans/{scan_id}/events?token={token}") as websocket:
+            data = websocket.receive_json()
+            assert data["scan_id"] == str(scan_id)
+            assert data["status"] == "completed"
+
+    async def test_websocket_unauthenticated_rejected(self):
+        import pytest
+        from starlette.testclient import TestClient
+        from starlette.websockets import WebSocketDisconnect
+
+        from app.main import app
+
         user, _ = await create_test_user("inspector")
         scan_id = uuid.uuid4()
         async with AsyncSessionLocal() as session:
@@ -246,7 +273,7 @@ class TestScanEventsWebSocket:
             await session.commit()
 
         client = TestClient(app)
-        with client.websocket_connect(f"/api/v1/scans/{scan_id}/events") as websocket:
-            data = websocket.receive_json()
-            assert data["scan_id"] == str(scan_id)
-            assert data["status"] == "completed"
+        with pytest.raises(WebSocketDisconnect) as exc_info:
+            with client.websocket_connect(f"/api/v1/scans/{scan_id}/events"):
+                pass
+        assert exc_info.value.code == 1008

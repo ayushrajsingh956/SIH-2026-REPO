@@ -1,16 +1,19 @@
 import logging
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, Query, status
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.audit import record_audit_event
 from app.core.database import get_db
 from app.core.deps import require_role
+from app.core.exceptions import ProblemDetailException
+from app.models.product import Product
 from app.models.rule_config import RuleConfig
+from app.models.scan import Scan
 from app.models.user import User
 from app.models.violation import Violation
-from app.schemas.rule import RuleAdminUpdateRequest, RuleResponse
+from app.schemas.rule import RuleAdminUpdateRequest, RuleRecentScanItem, RuleResponse
 from app.services.rules import get_all_rules, get_rule
 
 logger = logging.getLogger(__name__)
@@ -47,6 +50,7 @@ async def list_rules(
         cfg = configs_by_code.get(rule_id)
         is_enabled = cfg.is_enabled if cfg else True
         severity_override = cfg.severity_override if cfg else None
+        thresholds = cfg.thresholds if cfg else None
         effective_severity = severity_override if severity_override else rule_def.severity
         count = trigger_counts.get(rule_id, 0)
 
@@ -64,6 +68,7 @@ async def list_rules(
                 mandatory=rule_def.mandatory,
                 is_enabled=is_enabled,
                 severity_override=severity_override,
+                thresholds=thresholds,
                 trigger_count=count,
             )
         )
@@ -83,9 +88,11 @@ async def get_rule_by_code(
 ) -> RuleResponse:
     rule_def = get_rule(code)
     if not rule_def:
-        raise HTTPException(
+        raise ProblemDetailException(
             status_code=status.HTTP_404_NOT_FOUND,
+            title="Rule Not Found",
             detail=f"Rule '{code}' not found.",
+            type_url="https://errors.legalmetro.gov.in/rule-not-found",
         )
 
     cfg_stmt = select(RuleConfig).where(RuleConfig.code == code)
@@ -98,6 +105,7 @@ async def get_rule_by_code(
 
     is_enabled = cfg.is_enabled if cfg else True
     severity_override = cfg.severity_override if cfg else None
+    thresholds = cfg.thresholds if cfg else None
     effective_severity = severity_override if severity_override else rule_def.severity
 
     return RuleResponse(
@@ -113,8 +121,59 @@ async def get_rule_by_code(
         mandatory=rule_def.mandatory,
         is_enabled=is_enabled,
         severity_override=severity_override,
+        thresholds=thresholds,
         trigger_count=trigger_count,
     )
+
+
+@router.get(
+    "/{code}/recent-scans",
+    response_model=list[RuleRecentScanItem],
+    summary="Get recent scans and violations triggering this rule",
+)
+async def get_rule_recent_scans(
+    code: str,
+    limit: int = Query(10, ge=1, le=50),
+    current_user: User = Depends(require_role("admin", "inspector", "viewer")),
+    db: AsyncSession = Depends(get_db),
+) -> list[RuleRecentScanItem]:
+    stmt = (
+        select(
+            Violation,
+            Scan.mode,
+            Scan.scanned_at,
+            Scan.verdict,
+            User.name.label("inspector_name"),
+            Product.name.label("product_name"),
+        )
+        .join(Scan, Violation.scan_id == Scan.id)
+        .outerjoin(User, Scan.scanned_by == User.id)
+        .outerjoin(Product, Scan.product_id == Product.id)
+        .where(Violation.rule_code == code)
+        .order_by(Scan.scanned_at.desc())
+        .limit(limit)
+    )
+    res = await db.execute(stmt)
+    rows = res.all()
+
+    items: list[RuleRecentScanItem] = []
+    for v, mode, scanned_at, verdict, inspector_name, product_name in rows:
+        items.append(
+            RuleRecentScanItem(
+                scan_id=str(v.scan_id),
+                violation_id=str(v.id),
+                mode=mode,
+                scanned_at=scanned_at.isoformat(),
+                verdict=verdict,
+                observed_value=v.observed_value,
+                expected_value=v.expected_value,
+                field_name=v.field_name,
+                overridden=v.overridden,
+                inspector_name=inspector_name,
+                product_name=product_name,
+            )
+        )
+    return items
 
 
 @admin_router.put(
@@ -130,9 +189,11 @@ async def update_rule_config(
 ) -> RuleResponse:
     rule_def = get_rule(code)
     if not rule_def:
-        raise HTTPException(
+        raise ProblemDetailException(
             status_code=status.HTTP_404_NOT_FOUND,
+            title="Rule Not Found",
             detail=f"Rule '{code}' not found in registered rules.",
+            type_url="https://errors.legalmetro.gov.in/rule-not-found",
         )
 
     cfg_stmt = select(RuleConfig).where(RuleConfig.code == code)
@@ -144,6 +205,7 @@ async def update_rule_config(
             code=code,
             is_enabled=True,
             severity_override=None,
+            thresholds=None,
             updated_by=current_user.id,
         )
         db.add(cfg)
@@ -156,6 +218,9 @@ async def update_rule_config(
             cfg.severity_override = None
         else:
             cfg.severity_override = update_req.severity_override
+
+    if update_req.thresholds is not None:
+        cfg.thresholds = update_req.thresholds
 
     cfg.updated_by = current_user.id
 
@@ -170,6 +235,7 @@ async def update_rule_config(
             "rule_code": code,
             "is_enabled": cfg.is_enabled,
             "severity_override": cfg.severity_override,
+            "thresholds": cfg.thresholds,
         },
     )
 
@@ -195,5 +261,6 @@ async def update_rule_config(
         mandatory=rule_def.mandatory,
         is_enabled=cfg.is_enabled,
         severity_override=cfg.severity_override,
+        thresholds=cfg.thresholds,
         trigger_count=trigger_count,
     )

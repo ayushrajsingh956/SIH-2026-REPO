@@ -4,6 +4,17 @@ import { ProtectedRoute } from "@/app/guards/ProtectedRoute";
 import { LoginPage } from "@/pages/auth/LoginPage";
 import { RegisterPage } from "@/pages/auth/RegisterPage";
 import { DashboardPage } from "@/pages/dashboard/DashboardPage";
+import { NewScanPage } from "@/pages/scans/NewScanPage";
+import { ScanDetailPage } from "@/pages/scans/ScanDetailPage";
+import { ScansListPage } from "@/pages/scans/ScansListPage";
+import { ProductsPage } from "@/pages/products/ProductsPage";
+import { ProductDetailPage } from "@/pages/products/ProductDetailPage";
+import { ViolationsExplorerPage } from "@/pages/violations/ViolationsExplorerPage";
+import { RulesExplorerPage } from "@/pages/rules/RulesExplorerPage";
+import { ReportsPage } from "@/pages/reports/ReportsPage";
+import { UsersManagementPage } from "@/pages/admin/UsersManagementPage";
+import { AuditLogPage } from "@/pages/admin/AuditLogPage";
+import { RuleConfigPage } from "@/pages/admin/RuleConfigPage";
 
 export const router = createBrowserRouter([
   {
@@ -34,12 +45,39 @@ export const router = createBrowserRouter([
         path: "scans",
         element: (
           <ProtectedRoute>
-            <div className="bg-white p-8 rounded-xl border border-slate-200">
-              <h2 className="text-xl font-bold">Scans Repository</h2>
-              <p className="text-slate-500 text-sm mt-1">
-                Scan listing and ingestion pipelines (Phase 2).
-              </p>
-            </div>
+            <ScansListPage />
+          </ProtectedRoute>
+        ),
+      },
+      {
+        path: "scans/new",
+        element: (
+          <ProtectedRoute allowedRoles={["admin", "inspector"]}>
+            <NewScanPage />
+          </ProtectedRoute>
+        ),
+      },
+      {
+        path: "scans/:id",
+        element: (
+          <ProtectedRoute>
+            <ScanDetailPage />
+          </ProtectedRoute>
+        ),
+      },
+      {
+        path: "products",
+        element: (
+          <ProtectedRoute>
+            <ProductsPage />
+          </ProtectedRoute>
+        ),
+      },
+      {
+        path: "products/:id",
+        element: (
+          <ProtectedRoute>
+            <ProductDetailPage />
           </ProtectedRoute>
         ),
       },
@@ -47,12 +85,7 @@ export const router = createBrowserRouter([
         path: "violations",
         element: (
           <ProtectedRoute>
-            <div className="bg-white p-8 rounded-xl border border-slate-200">
-              <h2 className="text-xl font-bold">Violations Explorer</h2>
-              <p className="text-slate-500 text-sm mt-1">
-                Cross-scan violation search and filters (Phase 3).
-              </p>
-            </div>
+            <ViolationsExplorerPage />
           </ProtectedRoute>
         ),
       },
@@ -60,25 +93,43 @@ export const router = createBrowserRouter([
         path: "reports",
         element: (
           <ProtectedRoute>
-            <div className="bg-white p-8 rounded-xl border border-slate-200">
-              <h2 className="text-xl font-bold">Generated Compliance Reports</h2>
-              <p className="text-slate-500 text-sm mt-1">
-                Downloadable PDF and DOCX reports (Phase 3).
-              </p>
-            </div>
+            <ReportsPage />
           </ProtectedRoute>
         ),
+      },
+      {
+        path: "rules",
+        element: (
+          <ProtectedRoute>
+            <RulesExplorerPage />
+          </ProtectedRoute>
+        ),
+      },
+      {
+        path: "admin",
+        element: <Navigate to="/admin/users" replace />,
       },
       {
         path: "admin/users",
         element: (
           <ProtectedRoute allowedRoles={["admin"]}>
-            <div className="bg-white p-8 rounded-xl border border-slate-200">
-              <h2 className="text-xl font-bold">User Management (Admin)</h2>
-              <p className="text-slate-500 text-sm mt-1">
-                Manage user roles and approve pending viewer accounts.
-              </p>
-            </div>
+            <UsersManagementPage />
+          </ProtectedRoute>
+        ),
+      },
+      {
+        path: "admin/audit-log",
+        element: (
+          <ProtectedRoute allowedRoles={["admin"]}>
+            <AuditLogPage />
+          </ProtectedRoute>
+        ),
+      },
+      {
+        path: "admin/rules",
+        element: (
+          <ProtectedRoute allowedRoles={["admin"]}>
+            <RuleConfigPage />
           </ProtectedRoute>
         ),
       },

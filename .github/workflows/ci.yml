@@ -38,6 +38,9 @@ jobs:
       - name: Run Pytest suite
         run: uv run pytest -v
 
+      - name: Security audit (pip-audit)
+        run: uvx pip-audit
+
   frontend:
     name: Frontend Lint & Test
     runs-on: ubuntu-latest
@@ -68,3 +71,84 @@ jobs:
 
       - name: Run Vitest tests
         run: pnpm test
+
+      - name: Security audit (pnpm audit production)
+        run: pnpm audit --prod || echo "Production vulnerabilities noted for review"
+
+  contract-check:
+    name: OpenAPI Contract Consistency Check
+    runs-on: ubuntu-latest
+    needs: [backend, frontend]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v3
+        with:
+          enable-cache: true
+          cache-dependency-glob: "backend/pyproject.toml"
+
+      - name: Set up Python 3.12
+        run: uv python install 3.12
+
+      - name: Install backend dependencies
+        run: uv sync --all-extras --dev
+        working-directory: backend
+
+      - name: Export OpenAPI schema
+        run: |
+          uv run python -c "import json; from app.main import app; print(json.dumps(app.openapi()))" > ../frontend/openapi.json
+        working-directory: backend
+
+      - name: Set up Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - name: Install frontend dependencies
+        run: pnpm install
+        working-directory: frontend
+
+      - name: Regenerate types from exported OpenAPI schema
+        run: npx openapi-typescript openapi.json -o ./src/services/types.ts
+        working-directory: frontend
+
+      - name: Verify no contract drift
+        run: |
+          git diff --exit-code frontend/src/services/types.ts || (echo "Error: frontend/src/services/types.ts is out of sync with backend OpenAPI schema! Run 'npm run codegen:api' and commit the result." && exit 1)
+
+  e2e-smoke:
+    name: Playwright E2E Smoke Test
+    runs-on: ubuntu-latest
+    needs: [backend, frontend]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - name: Set up Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: "pnpm"
+          cache-dependency-path: "frontend/package.json"
+
+      - name: Install frontend dependencies
+        run: pnpm install
+        working-directory: frontend
+
+      - name: Build frontend
+        run: pnpm run build
+        working-directory: frontend
+
+

@@ -3,7 +3,11 @@ from collections.abc import AsyncGenerator
 import pytest
 from httpx import ASGITransport, AsyncClient
 
+from app.core.limiter import limiter
 from app.main import app
+
+# Disable rate limiter for functional test suites so tests aren't blocked
+limiter.enabled = False
 
 
 @pytest.fixture

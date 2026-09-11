@@ -14,7 +14,7 @@ def evaluate_rules(
     fields: ExtractionFields | dict[str, Any],
     scan_mode: str = "retail",
     surface_area_cm2: float | None = None,
-    font_check_mode: str = "relative",
+    font_check_mode: str | None = None,
     detected_text_blocks: Sequence[TextBlock | dict[str, Any]] | None = None,
     raw_text: str | None = None,
     rule_overrides: dict[str, Any] | list[Any] | None = None,
@@ -86,10 +86,14 @@ def evaluate_rules(
         overrides_map = rule_overrides
 
     # 4. Prepare Context
+    resolved_font_check_mode = font_check_mode
+    if resolved_font_check_mode is None:
+        resolved_font_check_mode = "surface_area" if surface_area_cm2 is not None else "relative"
+
     context = ValidationContext(
         scan_mode=scan_mode,
         surface_area_cm2=surface_area_cm2,
-        font_check_mode=font_check_mode,
+        font_check_mode=resolved_font_check_mode,
         detected_text_blocks=blocks_obj,
         raw_text=raw_text,
         rule_overrides=overrides_map,

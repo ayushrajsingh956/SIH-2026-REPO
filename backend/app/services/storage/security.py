@@ -124,8 +124,14 @@ def validate_ssrf_url(url: str) -> str:
         raise ValueError("Invalid or prohibited URL: Local or internal hostnames are not allowed.")
 
     # Check if host is direct IP address
+    is_ip = False
     try:
         ip = ipaddress.ip_address(host)
+        is_ip = True
+    except ValueError:
+        is_ip = False
+
+    if is_ip:
         if (
             ip.is_loopback
             or ip.is_private
@@ -135,7 +141,7 @@ def validate_ssrf_url(url: str) -> str:
             or ip.is_reserved
         ):
             raise ValueError(f"Invalid or prohibited URL: Access to IP '{host}' is blocked.")
-    except ValueError:
+    else:
         # Not a direct IP literal; perform DNS resolution check to prevent DNS rebinding
         try:
             addr_info = socket.getaddrinfo(host, None)
@@ -146,7 +152,9 @@ def validate_ssrf_url(url: str) -> str:
                     resolved_ip.is_loopback
                     or resolved_ip.is_private
                     or resolved_ip.is_link_local
+                    or resolved_ip.is_multicast
                     or resolved_ip.is_unspecified
+                    or resolved_ip.is_reserved
                 ):
                     raise ValueError(
                         f"Invalid or prohibited URL: Domain '{host}' resolves to prohibited IP '{resolved_ip_str}'."
