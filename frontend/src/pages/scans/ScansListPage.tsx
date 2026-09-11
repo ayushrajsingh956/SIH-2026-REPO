@@ -36,7 +36,7 @@ export const ScansListPage: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState<string>("");
 
   const { data, isLoading } = useQuery({
-    queryKey: ["scans", page, statusFilter, verdictFilter, modeFilter],
+    queryKey: ["scans", page, statusFilter, verdictFilter, modeFilter, searchQuery],
     queryFn: async () => {
       const params: Record<string, any> = {
         limit: PAGE_SIZE,
@@ -45,6 +45,7 @@ export const ScansListPage: React.FC = () => {
       if (statusFilter !== "all") params.status = statusFilter;
       if (verdictFilter !== "all") params.verdict = verdictFilter;
       if (modeFilter !== "all") params.mode = modeFilter;
+      if (searchQuery.trim()) params.search = searchQuery.trim();
 
       const res = await apiClient.get("/api/v1/scans", { params });
       return res.data;
@@ -54,17 +55,7 @@ export const ScansListPage: React.FC = () => {
   const scans = data?.items || [];
   const total = data?.total || 0;
   const totalPages = Math.ceil(total / PAGE_SIZE) || 1;
-
-  // Filter client-side by search query (Scan ID or mode)
-  const filteredScans = scans.filter((scan: any) => {
-    if (!searchQuery.trim()) return true;
-    const q = searchQuery.toLowerCase().trim();
-    return (
-      scan.id.toLowerCase().includes(q) ||
-      scan.mode.toLowerCase().includes(q) ||
-      (scan.verdict && scan.verdict.toLowerCase().includes(q))
-    );
-  });
+  const filteredScans = scans;
 
   return (
     <div className="space-y-6 max-w-7xl mx-auto">

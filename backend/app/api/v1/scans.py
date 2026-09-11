@@ -26,7 +26,7 @@ from sqlalchemy.orm import selectinload
 
 from app.core.audit import record_audit_event
 from app.core.config import settings
-from app.core.database import get_db
+from app.core.database import AsyncSessionLocal, get_db
 from app.core.deps import require_role
 from app.core.exceptions import ProblemDetailException
 from app.core.limiter import limiter
@@ -306,12 +306,24 @@ async def create_scan_from_url(
         if img_url and img_url not in image_candidates:
             image_candidates.append(img_url)
 
+    # Normalize candidates against the page URL (og:image may also be relative)
+    base_url = str(resp.url)
+    image_candidates = [
+        urllib.parse.urljoin(base_url, candidate) for candidate in image_candidates
+    ]
+
     # Fallback to standard <img> tags if no og:image
     if not image_candidates:
         for img_tag in soup.find_all("img"):
             src = img_tag.get("src")
-            if src and src.startswith("http") and src not in image_candidates:
-                image_candidates.append(src)
+            if not src:
+                continue
+            absolute_src = urllib.parse.urljoin(base_url, src.strip())
+            if (
+                absolute_src.startswith(("http://", "https://"))
+                and absolute_src not in image_candidates
+            ):
+                image_candidates.append(absolute_src)
             if len(image_candidates) >= MAX_IMAGES_PER_SCAN:
                 break
 
@@ -506,6 +518,7 @@ async def list_scans(
     status: str | None = None,
     verdict: str | None = None,
     mode: str | None = None,
+    search: str | None = None,
     current_user: User = Depends(require_role("admin", "inspector", "viewer")),
     db: AsyncSession = Depends(get_db),
 ) -> ScanListResponse:
@@ -519,6 +532,17 @@ async def list_scans(
         filters.append(Scan.verdict == verdict)
     if mode:
         filters.append(Scan.mode == mode)
+    if search and search.strip():
+        s = f"%{search.strip()}%"
+        from sqlalchemy import String, cast, or_
+
+        filters.append(
+            or_(
+                cast(Scan.id, String).ilike(s),
+                Scan.mode.ilike(s),
+                Scan.verdict.ilike(s),
+            )
+        )
 
     if filters:
         base_query = base_query.where(*filters)
@@ -754,7 +778,6 @@ async def override_scan_violation(
 async def scan_events_websocket(
     websocket: WebSocket,
     id: uuid.UUID,
-    db: AsyncSession = Depends(get_db),
 ) -> None:
     """WebSocket endpoint pushing real-time status changes and progress updates."""
     # 1. Authenticate connection via token query parameter or Authorization header
@@ -775,36 +798,37 @@ async def scan_events_websocket(
         await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
         return
 
-    # Verify user exists and is active
-    user_stmt = select(User).where(User.id == user_id, User.is_active == True)  # noqa: E712
-    user_res = await db.execute(user_stmt)
-    user = user_res.scalar_one_or_none()
-    if not user:
-        await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
-        return
+    # Use a brief session for initial user/scan checks, then release it immediately
+    async with AsyncSessionLocal() as db:
+        user_stmt = select(User).where(User.id == user_id, User.is_active == True)  # noqa: E712
+        user_res = await db.execute(user_stmt)
+        user = user_res.scalar_one_or_none()
+        if not user:
+            await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
+            return
 
-    # 2. Verify scan exists
-    stmt = select(Scan).where(Scan.id == id)
-    result = await db.execute(stmt)
-    scan = result.scalar_one_or_none()
+        stmt = select(Scan).where(Scan.id == id)
+        result = await db.execute(stmt)
+        scan = result.scalar_one_or_none()
 
-    if not scan:
-        await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
-        return
+        if not scan:
+            await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
+            return
 
-    await websocket.accept()
-
-    # 3. Push initial current state
-    await websocket.send_json(
-        {
+        initial_payload = {
             "scan_id": str(scan.id),
             "status": scan.status,
             "pipeline_meta": scan.pipeline_meta,
         }
-    )
+        initial_status = scan.status
+
+    await websocket.accept()
+
+    # 3. Push initial current state
+    await websocket.send_json(initial_payload)
 
     # If scan is already completed/failed/needs_review, close cleanly
-    if scan.status in ("completed", "needs_review", "failed"):
+    if initial_status in ("completed", "needs_review", "failed"):
         await websocket.close(code=status.WS_1000_NORMAL_CLOSURE)
         return
 

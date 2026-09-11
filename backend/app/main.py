@@ -59,10 +59,11 @@ def create_app() -> FastAPI:
             headers={"Retry-After": "60"},
         )
 
-    # CORS Middleware
+    # CORS Middleware with explicit list and regex for all localhost development ports
     app.add_middleware(
         CORSMiddleware,
         allow_origins=settings.CORS_ORIGINS,
+        allow_origin_regex=r"^https?://(localhost|127\.0\.0\.1)(:[0-9]+)?$",
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],

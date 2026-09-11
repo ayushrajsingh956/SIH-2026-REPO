@@ -52,13 +52,14 @@ class Settings(BaseSettings):
     # Groq Fallback & Multi-Model
     GROQ_API_KEY: str = ""
     GROQ_BASE_URL: str = "https://api.groq.com/openai/v1"
-    GROQ_MODEL: str = "groq/compound"
+    GROQ_MODEL: str = "qwen/qwen3.8-27b"
     GROQ_FALLBACK_MODELS: list[str] = [
+        "qwen/qwen3.8-27b",
+        "qwen/qwen3.6-27b",
         "groq/compound",
         "groq/compound-mini",
         "openai/gpt-oss-120b",
         "openai/gpt-oss-20b",
-        "qwen/qwen3.8-27b",
     ]
 
     # Authentication & Tokens

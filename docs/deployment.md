@@ -131,7 +131,9 @@ The following environment variables configure the system across development, sta
 | `REFRESH_TOKEN_EXPIRE_DAYS`| `30` | No | Refresh token validity lifetime in days. |
 | `GEMINI_API_KEY` | `""` | Yes | Google Gemini API Key for multimodal extraction. |
 | `GEMINI_MODEL` | `gemini-2.5-flash` | No | Vision model identifier. |
-| `OCR_PROVIDER` | `gemini` | No | Primary OCR provider (`gemini` or `tesseract`). |
+| `OCR_PROVIDER` | `gemini` | No | Primary OCR provider (`gemini`, `groq`, or `tesseract`). |
+| `GROQ_API_KEY` | `""` | No | Groq API key — used as vision failover when Groq is configured. |
+| `GROQ_MODEL` | `groq/compound` | No | Groq model id (must be vision-capable for image input; e.g. `qwen/qwen3.8-27b`). |
 | `RATE_LIMITING_ENABLED` | `true` | No | Enables SlowAPI rate limiting (5/min login, 30/min upload). |
 | `CORS_ORIGINS` | `["http://localhost:5173"]` | Yes | Allowed web origins for CORS policy. |
 | `SMTP_HOST` | `""` | Optional | SMTP host for email alerts on failed/needs_review scans. |
@@ -276,3 +278,35 @@ primary_region = "bom" # Mumbai, India region for low latency
   method = "get"
   path = "/healthz"
 ```
+
+---
+
+## 6. Admin User Bootstrap
+
+There is no manual "create first user" step — provisioning happens via the idempotent seeder:
+
+```bash
+docker compose exec api uv run python -m app.seed
+```
+
+What it provisions (all roles verified/created on every run):
+
+| Account | Role | Password |
+|---|---|---|
+| `admin@legalmetro.gov.in` | admin | `AdminPass123!` |
+| `inspector@legalmetro.gov.in` | inspector | `InspectorPass123!` |
+| `inspector.mumbai@legalmetro.gov.in` | inspector | `InspectorPass123!` |
+| `viewer@legalmetro.gov.in` | viewer | `ViewerPass123!` |
+
+Plus 15 statutory commodities, ~45 seeded scans across verdicts (including a repeat-offender
+product), and sample report rows. The seeder is **safe to re-run**: existing users are
+verified/reset in place, scans are only generated below a count threshold, and report seeds
+only fill gaps.
+
+**Rotating the seeded admin password:** create the replacement via `POST /api/v1/admin/users`
+(admin token required) or update the password in the `users` table, then re-run the seeder —
+it resets `password_hash` from `USERS_DATA`, so if you rotate secrets in production, update
+`USERS_DATA` (or remove the reset block in `backend/app/seed.py`) before re-running.
+
+**Additional admins/inspectors:** create via `POST /api/v1/admin/users` with an admin JWT.
+Viewers may self-register at `/register` but land `is_active=false` pending admin approval.

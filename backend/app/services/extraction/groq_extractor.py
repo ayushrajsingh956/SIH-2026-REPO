@@ -17,11 +17,14 @@ logger = logging.getLogger(__name__)
 
 
 def _clean_json_markdown(text: str) -> str:
-    """Removes markdown code fences from JSON output if present."""
+    """Removes markdown code fences and extraneous text from JSON output."""
     trimmed = text.strip()
     match = re.search(r"```(?:json)?\s*(\{.*\})\s*```", trimmed, re.DOTALL)
     if match:
         return match.group(1).strip()
+    brace_match = re.search(r"(\{.*\})", trimmed, re.DOTALL)
+    if brace_match:
+        return brace_match.group(1).strip()
     return trimmed
 
 
@@ -100,6 +103,7 @@ def extract_with_groq(
     headers = {
         "Authorization": f"Bearer {key}",
         "Content-Type": "application/json",
+        "User-Agent": "LegalMetro-Shield/1.0",
     }
 
     # Prepare base64 images for multimodal vision requests
@@ -173,14 +177,11 @@ def extract_with_groq(
                     continue
 
                 # If model is text-only or returns 400 rejecting image_url, fallback to OCR transcript
-                if resp.status_code == 400 and (
-                    "image" in resp.text.lower()
-                    or "vision" in resp.text.lower()
-                    or "must be a string" in resp.text.lower()
-                ):
+                if resp.status_code == 400:
                     logger.info(
-                        "Model %s does not support vision inputs. Retrying with OCR text prompt.",
+                        "Model %s does not accept vision inputs (%s). Retrying with OCR text prompt.",
                         model,
+                        resp.text[:80],
                     )
                     if cached_ocr_text is None:
                         cached_ocr_text = _extract_offline_ocr_text(images_bytes)

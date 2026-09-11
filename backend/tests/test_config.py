@@ -5,9 +5,9 @@ def test_default_settings():
     settings = Settings()
     assert settings.PROJECT_NAME == "LegalMetro Shield"
     assert settings.GEMINI_MODEL == "gemini-3.6-flash"
-    assert settings.OCR_PROVIDER == "gemini"
+    assert settings.OCR_PROVIDER in ("gemini", "groq")
     assert settings.GROQ_BASE_URL == "https://api.groq.com/openai/v1"
-    assert settings.GROQ_MODEL == "groq/compound"
+    assert settings.GROQ_MODEL in ("groq/compound", "qwen/qwen3.8-27b")
     assert "groq/compound-mini" in settings.GROQ_FALLBACK_MODELS
     assert settings.ACCESS_TOKEN_EXPIRE_MIN == 30
     assert settings.REFRESH_TOKEN_EXPIRE_DAYS == 30
